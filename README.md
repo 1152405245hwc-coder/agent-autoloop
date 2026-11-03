@@ -187,7 +187,7 @@ AGENT_HUB_URL=http://127.0.0.1:3350 AGENT_HUB_KEY="$CHANNEL_KEY" sh examples/cha
 | 命令行 | `agent-hub status` 查看，`agent-hub answer` 回答 |
 | 其他通道 | 按协议领卡片、发送、报告、转交回答 |
 
-飞书和群机器人模板目前只用假服务测过。你也可以用 `agent-hub mcp` 接入支持 stdio MCP 2025-11-25 的客户端，查看、追溯、回答和处理事项。
+飞书已经在真实应用里跑通发送、点击和更新卡片；群机器人模板目前只用假服务测过。你也可以用 `agent-hub mcp` 接入支持 stdio MCP 2025-11-25 的客户端，查看、追溯、回答和处理事项。
 
 ## 交付流水线
 

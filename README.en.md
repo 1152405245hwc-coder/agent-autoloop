@@ -187,7 +187,7 @@ Use `use: "command"` and split a plain command into a `command` array. `{prompt}
 | CLI | `agent-hub status` to view, `agent-hub answer` to answer |
 | Other channels | Receive cards, send them, report delivery and relay answers through the protocol |
 
-Feishu and the group-bot templates have only been tested against fake services. `agent-hub mcp` also connects stdio MCP 2025-11-25 clients to view, trace, answer and manage work.
+Feishu has run for real: sending, button clicks and card updates. The group robot templates have only been tested against fake services so far. `agent-hub mcp` also connects stdio MCP 2025-11-25 clients to view, trace, answer and manage work.
 
 ## Delivery pipeline
 
