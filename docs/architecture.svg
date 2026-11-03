@@ -84,20 +84,21 @@ text{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
 <rect class="you" x="840" y="125" width="96" height="60" rx="30"/>
 <text x="888" y="161" class="h2" text-anchor="middle">你</text>
 <rect class="core" x="24" y="344" width="912" height="122" rx="20"/>
-<text x="48" y="394" class="ct">内核</text>
-<text x="48" y="418" class="cs">零依赖 · 不主动连任何东西</text>
+<text x="48" y="390" class="ct">内核</text>
+<text x="48" y="414" class="cs">不到 1500 行 · 零依赖</text>
+<text x="48" y="434" class="cs">不主动连任何东西</text>
 <rect class="chip" x="236" y="358" width="160" height="58" rx="8"/>
-<text x="316.0" y="384.0" class="cn" text-anchor="middle">规则</text>
-<text x="316.0" y="403.0" class="cd" text-anchor="middle">决定交给谁</text>
+<text x="316.0" y="384.0" class="cn" text-anchor="middle">唯一决策</text>
+<text x="316.0" y="403.0" class="cd" text-anchor="middle">状态只有它能改</text>
 <rect class="chip" x="408" y="358" width="160" height="58" rx="8"/>
-<text x="488.0" y="384.0" class="cn" text-anchor="middle">事项</text>
-<text x="488.0" y="403.0" class="cd" text-anchor="middle">等回答不占进程</text>
+<text x="488.0" y="384.0" class="cn" text-anchor="middle">确定性</text>
+<text x="488.0" y="403.0" class="cd" text-anchor="middle">同样输入，同样结果</text>
 <rect class="chip" x="580" y="358" width="160" height="58" rx="8"/>
-<text x="660.0" y="384.0" class="cn" text-anchor="middle">日志</text>
-<text x="660.0" y="403.0" class="cd" text-anchor="middle">只追加、可追溯</text>
+<text x="660.0" y="384.0" class="cn" text-anchor="middle">一条日志</text>
+<text x="660.0" y="403.0" class="cd" text-anchor="middle">每个决定都能追溯</text>
 <rect class="chip" x="752" y="358" width="160" height="58" rx="8"/>
-<text x="832.0" y="384.0" class="cn" text-anchor="middle">定时器</text>
-<text x="832.0" y="403.0" class="cd" text-anchor="middle">cron、复查、重试</text>
+<text x="832.0" y="384.0" class="cn" text-anchor="middle">强杀不丢</text>
+<text x="832.0" y="403.0" class="cd" text-anchor="middle">确认过的事实不丢</text>
 <path class="conn" d="M122 288V342"/>
 <circle class="badge" cx="122" cy="315" r="12"/>
 <text x="122" y="319.5" class="n" text-anchor="middle">1</text>
@@ -105,7 +106,7 @@ text{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
 <path class="conn" d="M360 342V288"/>
 <circle class="badge" cx="360" cy="315" r="12"/>
 <text x="360" y="319.5" class="n" text-anchor="middle">2</text>
-<text x="340" y="320" class="l" text-anchor="end">派活</text>
+<text x="340" y="320" class="l" text-anchor="end">按规则派活</text>
 <path class="conn" d="M440 288V342"/>
 <circle class="badge" cx="440" cy="315" r="12"/>
 <text x="440" y="319.5" class="n" text-anchor="middle">3</text>

@@ -84,20 +84,21 @@ text{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
 <rect class="you" x="840" y="125" width="96" height="60" rx="30"/>
 <text x="888" y="161" class="h2" text-anchor="middle">You</text>
 <rect class="core" x="24" y="344" width="912" height="122" rx="20"/>
-<text x="48" y="394" class="ct">Kernel</text>
-<text x="48" y="418" class="cs">No dependencies</text>
+<text x="48" y="390" class="ct">Kernel</text>
+<text x="48" y="414" class="cs">Under 1,500 lines</text>
+<text x="48" y="434" class="cs">No dependencies</text>
 <rect class="chip" x="236" y="358" width="160" height="58" rx="8"/>
-<text x="316.0" y="384.0" class="cn" text-anchor="middle">Rules</text>
-<text x="316.0" y="403.0" class="cd" text-anchor="middle">who handles it</text>
+<text x="316.0" y="384.0" class="cn" text-anchor="middle">Sole decider</text>
+<text x="316.0" y="403.0" class="cd" text-anchor="middle">only it changes state</text>
 <rect class="chip" x="408" y="358" width="160" height="58" rx="8"/>
-<text x="488.0" y="384.0" class="cn" text-anchor="middle">Items</text>
-<text x="488.0" y="403.0" class="cd" text-anchor="middle">waiting is free</text>
+<text x="488.0" y="384.0" class="cn" text-anchor="middle">Deterministic</text>
+<text x="488.0" y="403.0" class="cd" text-anchor="middle">same input, same result</text>
 <rect class="chip" x="580" y="358" width="160" height="58" rx="8"/>
-<text x="660.0" y="384.0" class="cn" text-anchor="middle">Log</text>
-<text x="660.0" y="403.0" class="cd" text-anchor="middle">append-only</text>
+<text x="660.0" y="384.0" class="cn" text-anchor="middle">One log</text>
+<text x="660.0" y="403.0" class="cd" text-anchor="middle">every decision traceable</text>
 <rect class="chip" x="752" y="358" width="160" height="58" rx="8"/>
-<text x="832.0" y="384.0" class="cn" text-anchor="middle">Timer</text>
-<text x="832.0" y="403.0" class="cd" text-anchor="middle">cron, retries</text>
+<text x="832.0" y="384.0" class="cn" text-anchor="middle">Crash-safe</text>
+<text x="832.0" y="403.0" class="cd" text-anchor="middle">acked facts survive</text>
 <path class="conn" d="M122 288V342"/>
 <circle class="badge" cx="122" cy="315" r="12"/>
 <text x="122" y="319.5" class="n" text-anchor="middle">1</text>
@@ -105,7 +106,7 @@ text{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
 <path class="conn" d="M360 342V288"/>
 <circle class="badge" cx="360" cy="315" r="12"/>
 <text x="360" y="319.5" class="n" text-anchor="middle">2</text>
-<text x="340" y="320" class="l" text-anchor="end">work</text>
+<text x="340" y="320" class="l" text-anchor="end">work, by rules</text>
 <path class="conn" d="M440 288V342"/>
 <circle class="badge" cx="440" cy="315" r="12"/>
 <text x="440" y="319.5" class="n" text-anchor="middle">3</text>
