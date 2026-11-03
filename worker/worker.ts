@@ -201,6 +201,8 @@ export function createWorker({
       '"$@" >"$out" 2>"$err"',
       'echo $? >"$result.tmp"',
       'mv "$result.tmp" "$result"',
+      // A final external command can replace the shell before publishing its exit file.
+      ":",
     ].join("\n");
     // The login shell gives it the PATH and sign-in its owner has in a terminal; launchd and systemd give neither.
     const login = [process.env.SHELL ?? "/bin/sh", "-lc", 'exec "$0" "$@"'];

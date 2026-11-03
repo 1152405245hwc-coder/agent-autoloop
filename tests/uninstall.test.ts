@@ -99,7 +99,7 @@ function linksAreGone(it: Install) {
   assert.ok(!isThere(skillLink(it)));
 }
 
-test("the install it makes is what it takes away: service stopped, links gone, the data kept unless asked", () => {
+test("the install it makes is what it takes away: service stopped, links gone, all data always kept", () => {
   const it = install();
   assert.ok(lstatSync(skillLink(it)).isSymbolicLink(), "init linked the Skill");
   const service =

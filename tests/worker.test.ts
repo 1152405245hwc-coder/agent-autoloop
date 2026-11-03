@@ -10,6 +10,7 @@
 // can't be gone on in fails the run instead of starting a new one, or keeps trying; a turn's end that doesn't exit holds its
 // place for ever; an old turn's exit is taken for a new one's; the hub gone for ten minutes isn't told, told every minute,
 // taken as told when the telling failed, tried without end, or not told again after it came back and went away again.
+// A shell replacing itself with the final move must not lose its identity before the exit file is published.
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -234,6 +235,23 @@ test("an exit file written during the process check still delivers the finished 
   try {
     await w.tick();
     assert.equal(hub.results[0].summary, "在进程检查时做完了");
+  } finally {
+    process.env.PATH = previous;
+  }
+});
+
+test("the wrapper keeps its identity until the exit file is published", async () => {
+  const bin = join(home, "slow-publish-bin");
+  mkdirSync(bin);
+  writeFileSync(join(bin, "mv"), '#!/bin/sh\nsleep 0.2\nexec /bin/mv "$@"\n', { mode: 0o755 });
+  const previous = process.env.PATH;
+  process.env.PATH = `${bin}:${previous}`;
+  try {
+    const hub = fakeHub();
+    hub.jobs.push(job({ command: ["echo", "发布后结束"] }));
+    await until(worker(hub), () => hub.results.length === 1);
+    assert.equal(hub.results[0].outcome, "done", JSON.stringify(hub.results[0]));
+    assert.equal(hub.results[0].summary, "发布后结束");
   } finally {
     process.env.PATH = previous;
   }
