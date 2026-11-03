@@ -61,7 +61,7 @@ test("the prompt says what to do and how to end, but not what anyone wrote", () 
   assert.match(text, /删数据、花钱/);
   assert.match(text, /没跑成：/);
   assert.match(text, /没事可做：/);
-  assert.match(text, /```agent-hub/);
+  assert.match(text, /```agent-autoloop/);
   assert.ok(!text.includes("王某"));
   assert.ok(!text.includes("管理员权限"));
   assert.ok(!text.includes('"events"'), "a rule that can't emit isn't offered it");
@@ -102,30 +102,30 @@ test("the first line says how it ended", () => {
 
 test("the receipt is the last code block of its kind, wherever it sits", () => {
   const body =
-    '做完了\n\n```js\nconsole.log(1)\n```\n\n```agent-hub\n{"notice":[{"title":"看一眼","text":"这个"}]}\n```\n';
+    '做完了\n\n```js\nconsole.log(1)\n```\n\n```agent-autoloop\n{"notice":[{"title":"看一眼","text":"这个"}]}\n```\n';
   assert.deepEqual(readMessage(body), {
     outcome: "done",
     summary: "做完了",
     receipt: { notice: [{ title: "看一眼", text: "这个" }] },
   });
   const twice =
-    '做完了\n```agent-hub\n{"notice":[]}\n```\n改一下：\n```agent-hub\n{"later":[{"key":"k","cancel":true}]}\n```\n以上。';
+    '做完了\n```agent-autoloop\n{"notice":[]}\n```\n改一下：\n```agent-autoloop\n{"later":[{"key":"k","cancel":true}]}\n```\n以上。';
   assert.deepEqual(readMessage(twice).receipt, { later: [{ key: "k", cancel: true }] });
-  assert.equal(readMessage("```agent-hub\n{}\n```").summary, "");
+  assert.equal(readMessage("```agent-autoloop\n{}\n```").summary, "");
 });
 
 test("a receipt that can't be read says why, and keeps how the run ended", () => {
-  const bad = readMessage("做完了\n```agent-hub\n{ not json\n```");
+  const bad = readMessage("做完了\n```agent-autoloop\n{ not json\n```");
   assert.equal(bad.outcome, "done");
   assert.equal(bad.summary, "做完了");
   assert.match(bad.problem!, /不是合法的 JSON/);
-  assert.match(readMessage("做完了\n```agent-hub\n[1]\n```").problem!, /对象/);
-  assert.match(readMessage('做完了\n```agent-hub\n{"asks":[]}\n```').problem!, /asks/);
+  assert.match(readMessage("做完了\n```agent-autoloop\n[1]\n```").problem!, /对象/);
+  assert.match(readMessage('做完了\n```agent-autoloop\n{"asks":[]}\n```').problem!, /asks/);
 });
 
 test("a result is put together and checked as the hub will check it", () => {
   const good = resultFrom(
-    readMessage('好了\n```agent-hub\n{"ask":[{"title":"问","text":"答","options":["甲","乙"]}]}\n```'),
+    readMessage('好了\n```agent-autoloop\n{"ask":[{"title":"问","text":"答","options":["甲","乙"]}]}\n```'),
     { session: "s", usage: { input: 1 } },
   );
   assert.deepEqual(good, {
@@ -138,7 +138,7 @@ test("a result is put together and checked as the hub will check it", () => {
     },
   });
   const broken = resultFrom(
-    readMessage('好了\n```agent-hub\n{"ask":[{"title":"问","text":"答","options":["只有一个"]}]}\n```'),
+    readMessage('好了\n```agent-autoloop\n{"ask":[{"title":"问","text":"答","options":["只有一个"]}]}\n```'),
     {},
   );
   assert.match(broken.problem!, /ask/);

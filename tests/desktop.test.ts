@@ -15,7 +15,7 @@ import { after, test } from "node:test";
 import { setup } from "./helpers.ts";
 import type { Card } from "../host/channels.ts";
 
-const dir = mkdtempSync(join(tmpdir(), "agent-hub-desktop-"));
+const dir = mkdtempSync(join(tmpdir(), "agent-autoloop-desktop-"));
 const rulesFile = join(dir, "rules.json");
 const rulesWith = (channels: object) => ({
   sources: { local: { name: "本机" } },
@@ -38,7 +38,7 @@ const { loadPlugin } = await import("../host/plugins.ts");
 const { default: desktop, notifyCommand } = await import("../plugins/desktop/channel.ts");
 
 const TITLE = "Agent 问你一个问题";
-const WORDS = "运行 agent-hub status 查看";
+const WORDS = "运行 agent-autoloop status 查看";
 const body = (title: string) => `${title}\n${WORDS}`;
 const base: Card = {
   id: 5,
@@ -211,7 +211,7 @@ test("a slow notifier doesn't freeze the process the hub runs in", async () => {
   assert.ok(ticks >= 5, `only ${ticks} ticks while it was showing`);
 });
 
-const bin = join(import.meta.dirname, "..", "bin", "agent-hub.ts");
+const bin = join(import.meta.dirname, "..", "bin", "agent-autoloop.ts");
 const program = (env: NodeJS.ProcessEnv, ...args: string[]) =>
   spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", bin, ...args], {
     env,
@@ -219,9 +219,9 @@ const program = (env: NodeJS.ProcessEnv, ...args: string[]) =>
     timeout: 30_000,
   });
 const installEnv = (place: string) => {
-  const env: NodeJS.ProcessEnv = { ...process.env, PATH: realPath, HOME: place, AGENT_HUB_HOME: place };
-  delete env.AGENT_HUB_RULES;
-  delete env.AGENT_HUB_PUBLIC_URL;
+  const env: NodeJS.ProcessEnv = { ...process.env, PATH: realPath, HOME: place, AGENT_AUTOLOOP_HOME: place };
+  delete env.AGENT_AUTOLOOP_RULES;
+  delete env.AGENT_AUTOLOOP_PUBLIC_URL;
   return env;
 };
 

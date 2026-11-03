@@ -11,8 +11,8 @@ import { at, setup } from "./helpers.ts";
 
 const home = setup("schedule");
 const rulesFile = join(home, "rules.json");
-writeFileSync(rulesFile, readFileSync(process.env.AGENT_HUB_RULES!, "utf8"));
-process.env.AGENT_HUB_RULES = rulesFile;
+writeFileSync(rulesFile, readFileSync(process.env.AGENT_AUTOLOOP_RULES!, "utf8"));
+process.env.AGENT_AUTOLOOP_RULES = rulesFile;
 const { tick } = await import("../host/runtime.ts");
 const { ingest } = await import("../host/runtime.ts");
 const { claimNext, finish, started, heartbeat } = await import("../host/runtime.ts");

@@ -70,7 +70,7 @@ export default async function feishu({ hub, options, log, signal }: ChannelConte
   function sendMessage(cardId: number, content: string) {
     const target = ["--user-id", owner, "--as", "bot", "--msg-type", "interactive"];
     // The key is the card alone, not its version: a report that got lost must not make a second message.
-    const once = ["--idempotency-key", `agent-hub-card-${cardId}`];
+    const once = ["--idempotency-key", `agent-autoloop-card-${cardId}`];
     return lark(["im", "+messages-send", ...target, ...once, "--content", "-"], content).data.message_id as string;
   }
 

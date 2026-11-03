@@ -93,14 +93,14 @@ function save(entry: Entry) {
 function agentEnvironment(entry: Entry) {
   const env: NodeJS.ProcessEnv = {};
   for (const [name, value] of Object.entries(process.env)) {
-    if (/^(AGENT_HUB_|CLAUDECODE$|CLAUDE_CODE_|CODEX_(?!HOME$))/.test(name)) continue;
+    if (/^(AGENT_AUTOLOOP_|CLAUDECODE$|CLAUDE_CODE_|CODEX_(?!HOME$))/.test(name)) continue;
     env[name] = value;
   }
   return {
     ...env,
-    AGENT_HUB_HOME: HOME,
-    AGENT_HUB_RUN: String(entry.run),
-    AGENT_HUB_CONTEXT: path.join(entry.dir, "context.json"),
+    AGENT_AUTOLOOP_HOME: HOME,
+    AGENT_AUTOLOOP_RUN: String(entry.run),
+    AGENT_AUTOLOOP_CONTEXT: path.join(entry.dir, "context.json"),
   };
 }
 
@@ -109,7 +109,7 @@ const files = (entry: Entry) => ({
   err: path.join(entry.dir, `stderr-${entry.turn}.log`),
   exit: path.join(entry.dir, `exit-${entry.turn}`),
 });
-const marker = (entry: Entry) => `agent-hub-run:${entry.run}:${entry.attempt}:${entry.turn}`;
+const marker = (entry: Entry) => `agent-autoloop-run:${entry.run}:${entry.attempt}:${entry.turn}`;
 
 function alive(entry: Entry) {
   if (!entry.pid) return false;

@@ -64,7 +64,7 @@ const edits: [string, string, string, string][] = [
 const tests = ["kernel", "events", "cards", "runs", "schedule", "stream", "purity"].map((n) => `tests/${n}.test.ts`);
 export function mutate() {
   const root = join(import.meta.dirname, "..");
-  const folder = mkdtempSync(join(tmpdir(), "agent-hub-mutation-"));
+  const folder = mkdtempSync(join(tmpdir(), "agent-autoloop-mutation-"));
   // An inherited test-runner context bypasses the child CLI's test selection.
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;

@@ -6,10 +6,10 @@ import { join } from "node:path";
 import { after } from "node:test";
 
 export function setup(name: string, rules = "rules.fixture.json") {
-  const directory = mkdtempSync(join(tmpdir(), `agent-hub-${name}-`));
-  process.env.AGENT_HUB_HOME = directory;
-  process.env.AGENT_HUB_RULES = rules.startsWith("/") ? rules : join(import.meta.dirname, rules);
-  process.env.AGENT_HUB_PUBLIC_URL = "https://hub.test";
+  const directory = mkdtempSync(join(tmpdir(), `agent-autoloop-${name}-`));
+  process.env.AGENT_AUTOLOOP_HOME = directory;
+  process.env.AGENT_AUTOLOOP_RULES = rules.startsWith("/") ? rules : join(import.meta.dirname, rules);
+  process.env.AGENT_AUTOLOOP_PUBLIC_URL = "https://hub.test";
   after(() => rmSync(directory, { recursive: true, force: true }));
   return directory;
 }

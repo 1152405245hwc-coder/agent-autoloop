@@ -8,12 +8,12 @@ import { setTimeout as delay } from "node:timers/promises";
 
 const use = process.argv[2];
 assert.ok(["codex", "claude"].includes(use), "用法：node scripts/real-agents.ts codex|claude");
-const home = mkdtempSync(join(tmpdir(), `agent-hub-real-${use}-`));
-process.env.AGENT_HUB_HOME = home;
-process.env.AGENT_HUB_RULES = join(home, "rules.json");
+const home = mkdtempSync(join(tmpdir(), `agent-autoloop-real-${use}-`));
+process.env.AGENT_AUTOLOOP_HOME = home;
+process.env.AGENT_AUTOLOOP_RULES = join(home, "rules.json");
 mkdirSync(join(home, "work"));
 writeFileSync(
-  process.env.AGENT_HUB_RULES,
+  process.env.AGENT_AUTOLOOP_RULES,
   JSON.stringify({
     sources: { app: { name: "试跑" } },
     agents: {
@@ -34,7 +34,7 @@ writeFileSync(
         to: "real",
         cwd: join(home, "work"),
         prompt:
-          '这是有限的接入测试，只读给出的资料文件，不执行其他动作。answers 为空时，第一行只写“问了一个问题”，附 agent-hub 代码块 {"ask":[{"title":"选一个颜色","text":"试跑","options":["蓝色","绿色"],"key":"color"}]}。answers 不为空时，最后一条消息只写“你选了绿色，试跑通过”，不要再提问。',
+          '这是有限的接入测试，只读给出的资料文件，不执行其他动作。answers 为空时，第一行只写“问了一个问题”，附 agent-autoloop 代码块 {"ask":[{"title":"选一个颜色","text":"试跑","options":["蓝色","绿色"],"key":"color"}]}。answers 不为空时，最后一条消息只写“你选了绿色，试跑通过”，不要再提问。',
       },
     ],
   }),

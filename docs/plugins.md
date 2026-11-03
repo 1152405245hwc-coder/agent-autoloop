@@ -2,14 +2,14 @@
 
 一个插件就是一个目录，入口为 `agent.ts`、`channel.ts` 或 `source.ts`。只用 `node:` 模块和自己目录里的文件，类型在插件里声明；不要相对引用引擎源码。
 
-用 `agent-hub add <git 地址>` 安装到 `~/.agent-hub/plugins/<仓库名>`，也接受本地 Git 仓库。它只克隆，不装依赖、不跑安装脚本、不自动更新。加载时会执行插件，安装目录的同名插件优先。
+用 `agent-autoloop add <git 地址>` 安装到 `~/.agent-autoloop/plugins/<仓库名>`，也接受本地 Git 仓库。它只克隆，不装依赖、不跑安装脚本、不自动更新。加载时会执行插件，安装目录的同名插件优先。
 
 ## 先跑起来
 
 在引擎目录运行这条命令：它把三个例子分别装进临时中台，实际走完验签、派活、运行、通知和报告，退出后清理。
 
 ```bash
-node --disable-warning=ExperimentalWarning --test --test-name-pattern='agent-hub add' tests/example-plugins.test.ts
+node --disable-warning=ExperimentalWarning --test --test-name-pattern='agent-autoloop add' tests/example-plugins.test.ts
 ```
 
 ## Agent 插件
@@ -48,7 +48,7 @@ node --disable-warning=ExperimentalWarning --test --test-name-pattern='agent-hub
 
 `ref` 为空就发新消息，有值就更新原消息；不能更新时只报告。没报告的卡片一分钟后重派。`signal` 中止时退出，函数异常退出后由外壳重启。
 
-在 `rules.json` 登记通道、用 `agent-hub key new channel cards` 取密钥，再把下面这项放进 `config.json` 的 `channels`，重启中台：
+在 `rules.json` 登记通道、用 `agent-autoloop key new channel cards` 取密钥，再把下面这项放进 `config.json` 的 `channels`，重启中台：
 
 ```json
 { "cards": { "use": "hello-channel", "key": "通道密钥", "file": "/tmp/cards.txt" } }
@@ -68,7 +68,7 @@ node --disable-warning=ExperimentalWarning --test --test-name-pattern='agent-hub
 { "shop": { "name": "商店", "adapter": "hello-source" } }
 ```
 
-请求地址是 `/v1/in/shop`；秘密放在 `secrets.env` 的 `AGENT_HUB_SECRET_SHOP`，不写进规则。事件必须有稳定的 `id` 和合法的 `type`，可带 `subject`、`summary`、`detail`、`link`，上限见[协议](protocol.md#来源把世界变成事件)。
+请求地址是 `/v1/in/shop`；秘密放在 `secrets.env` 的 `AGENT_AUTOLOOP_SECRET_SHOP`，不写进规则。事件必须有稳定的 `id` 和合法的 `type`，可带 `subject`、`summary`、`detail`、`link`，上限见[协议](protocol.md#来源把世界变成事件)。
 
 来源能直接发标准 JSON 时不必写插件，用来源密钥调用 `POST /v1/events` 即可。
 
@@ -93,6 +93,6 @@ Codex 的三个档位已用插件命令实跑；Claude Code 依据[官方权限�
 node --disable-warning=ExperimentalWarning --test tests/conformance.test.ts
 ```
 
-检查其他中台实现时，用 `agent-hub conformance <测试地址> --config <测试凭据文件>`，文件格式见[协议](protocol.md#一致性和复现)。它会写事件和卡片，只对专用测试中台运行。
+检查其他中台实现时，用 `agent-autoloop conformance <测试地址> --config <测试凭据文件>`，文件格式见[协议](protocol.md#一致性和复现)。它会写事件和卡片，只对专用测试中台运行。
 
 插件本身的完整接入测试见 [tests/example-plugins.test.ts](../tests/example-plugins.test.ts)。用其他语言写独立进程也可以，参考 [curl/jq 通道](../examples/channel.sh)和[接单程序](../examples/worker.sh)。

@@ -43,7 +43,7 @@ async function child(file: string) {
 }
 export async function crashCheck(count = 1000, seed = 0xc0ffee) {
   const rng = random(seed);
-  const directory = mkdtempSync(join(tmpdir(), "agent-hub-crash-"));
+  const directory = mkdtempSync(join(tmpdir(), "agent-autoloop-crash-"));
   let acknowledged = 0;
   let unacknowledged = 0;
   let kills = 0;
@@ -56,7 +56,7 @@ export async function crashCheck(count = 1000, seed = 0xc0ffee) {
       const proc = fork(import.meta.filename, ["child", file], {
         execArgv: ["--disable-warning=ExperimentalWarning"],
         stdio: ["ignore", "ignore", "pipe", "ipc"],
-        env: { ...process.env, AGENT_HUB_HOME: directory },
+        env: { ...process.env, AGENT_AUTOLOOP_HOME: directory },
       });
       proc.stderr!.on("data", (b) => {
         err += b;

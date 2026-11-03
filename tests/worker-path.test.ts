@@ -6,11 +6,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 
-const scratch = mkdtempSync(join(tmpdir(), "agent-hub-worker-path-"));
+const scratch = mkdtempSync(join(tmpdir(), "agent-autoloop-worker-path-"));
 const home = join(scratch, "quote' $(touch path-injected)");
 const project = join(scratch, "project");
 mkdirSync(project);
-process.env.AGENT_HUB_HOME = home;
+process.env.AGENT_AUTOLOOP_HOME = home;
 process.env.SHELL = "/bin/sh";
 after(() => rmSync(scratch, { recursive: true, force: true }));
 const { createWorker } = await import("../worker/worker.ts");

@@ -1,4 +1,4 @@
-// The cost line in `agent-hub status`, worked out from the runs /v1/state already lists. Failure cases: "today" is the
+// The cost line in `agent-autoloop status`, worked out from the runs /v1/state already lists. Failure cases: "today" is the
 // machine's or UTC's day and not the rules' time zone; a price nobody reported is counted as zero, or rounds that didn't report
 // are passed over in silence; a round that never started is counted, or one that's only waiting to try again; a week's worth
 // of rounds is cut off at the first page of 60, or a run stuck in the queue since long ago ends the paging early.
@@ -92,7 +92,7 @@ test("status reads back past the first page, and a run stuck in the queue doesn'
 
   const { stdout } = await promisify(execFile)(
     process.execPath,
-    ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "../bin/agent-hub.ts"), "status"],
+    ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "../bin/agent-autoloop.ts"), "status"],
     { env: process.env },
   );
   const lines = stdout.split("\n");

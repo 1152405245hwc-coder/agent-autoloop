@@ -13,40 +13,40 @@ import { versionLine } from "../host/version.ts";
 import { spendLine, WEEK, type SpendingRun } from "./spend.ts";
 
 const ROOT = path.join(import.meta.dirname, "..");
-const PROGRAM = path.join(ROOT, "bin", "agent-hub.ts");
+const PROGRAM = path.join(ROOT, "bin", "agent-autoloop.ts");
 
 const HELP = `Agent 自动化中台
 
-  agent-hub init [--agent claude|codex] [--command '某个命令 {prompt}'] [--port 3350] [--no-service]
+  agent-autoloop init [--agent claude|codex] [--command '某个命令 {prompt}'] [--port 3350] [--no-service]
                                     在这台电脑上装好：一个人一台电脑就够
-  agent-hub try                     用你的 Agent 跑一遍完整流程
-  agent-hub why <第几轮> [--json]  查看时间线；--json 输出原始事实
-  agent-hub conformance <地址> --config <测试凭据文件>
+  agent-autoloop try                     用你的 Agent 跑一遍完整流程
+  agent-autoloop why <第几轮> [--json]  查看时间线；--json 输出原始事实
+  agent-autoloop conformance <地址> --config <测试凭据文件>
                                     在测试中台上检查协议
-  agent-hub status                  现在什么情况：谁在线、等你什么、在做什么、做过什么、花了多少
-  agent-hub answer <卡片> [序号] [--text 别的想法]
+  agent-autoloop status                  现在什么情况：谁在线、等你什么、在做什么、做过什么、花了多少
+  agent-autoloop answer <卡片> [序号] [--text 别的想法]
                                     回答一张卡片；通知不用写序号
-  agent-hub resolve <卡片> <结果>   这件事不用决定了，写一句结果
-  agent-hub doctor                  查哪里没配好
-  agent-hub check                   检查 rules.json
-  agent-hub emit <类型> [--subject x] [--summary x] [--detail x] [--link x] [--id x] [--key 来源密钥]
+  agent-autoloop resolve <卡片> <结果>   这件事不用决定了，写一句结果
+  agent-autoloop doctor                  查哪里没配好
+  agent-autoloop check                   检查 rules.json
+  agent-autoloop emit <类型> [--subject x] [--summary x] [--detail x] [--link x] [--id x] [--key 来源密钥]
                                     发一条事件
-  agent-hub tell <编号> [--task 定时任务名]
+  agent-autoloop tell <编号> [--task 定时任务名]
                                     直接告诉你一件事，内容从标准输入读
-  agent-hub stop <第几轮>           停掉一轮
-  agent-hub key new <source|worker|channel|owner> <名字>
+  agent-autoloop stop <第几轮>           停掉一轮
+  agent-autoloop key new <source|worker|channel|owner> <名字>
                                     新建一把密钥（只显示这一次）
-  agent-hub key list                有哪些密钥
-  agent-hub key remove <种类> <名字>  立即收回一把密钥
-  agent-hub add <git 地址>           安装插件，不自动更新
-  agent-hub mcp                      用标准输入输出连接 MCP 客户端
-  agent-hub join <中台地址> --worker <名字> --key <密钥>
+  agent-autoloop key list                有哪些密钥
+  agent-autoloop key remove <种类> <名字>  立即收回一把密钥
+  agent-autoloop add <git 地址>           安装插件，不自动更新
+  agent-autoloop mcp                      用标准输入输出连接 MCP 客户端
+  agent-autoloop join <中台地址> --worker <名字> --key <密钥>
                                     另一台电脑只接活时用
-  agent-hub update                  更新到最新版
-  agent-hub uninstall [--yes]       卸载程序并保留数据；--yes 跳过确认
-  agent-hub --version               版本和当前提交
-  agent-hub up                      启动（平时由系统服务调用）
-  agent-hub service install|remove  系统服务
+  agent-autoloop update                  更新到最新版
+  agent-autoloop uninstall [--yes]       卸载程序并保留数据；--yes 跳过确认
+  agent-autoloop --version               版本和当前提交
+  agent-autoloop up                      启动（平时由系统服务调用）
+  agent-autoloop service install|remove  系统服务
 
 配置和数据在 ${HOME}。规则在 ${RULES_FILE}，改了自动生效。`;
 
@@ -89,7 +89,7 @@ function starterRules(agents: Record<string, object>, first: string) {
         to: first,
         cwd: path.join(HOME, "try"),
         prompt:
-          "这是 agent-hub try 的试跑，不要改任何文件，不要做别的事。读资料文件。" +
+          "这是 agent-autoloop try 的试跑，不要改任何文件，不要做别的事。读资料文件。" +
           "如果 answers 是空的，就问一个问题：title 写“试跑：选一个颜色”，text 写“这是一次试跑，选哪个都行。”，" +
           'options 写 ["蓝色","绿色"]，key 写 try-color，第一行结论写“问了一个问题”。' +
           "如果 answers 不是空的，第一行结论写“你选了某某，试跑通过”，把某某换成 answers 里选的那一项，不附回执。",
@@ -101,20 +101,20 @@ function starterRules(agents: Record<string, object>, first: string) {
 
 /** Shows the user's Agents how to set it up. Only for the install in its usual place, never over their own. */
 function linkSkill() {
-  if (process.env.AGENT_HUB_HOME) return;
+  if (process.env.AGENT_AUTOLOOP_HOME) return;
   for (const agent of [".claude", ".codex"]) {
     if (!existsSync(path.join(homedir(), agent))) continue;
-    const link = path.join(homedir(), agent, "skills", "agent-hub");
+    const link = path.join(homedir(), agent, "skills", "agent-autoloop");
     if (lstatSync(link, { throwIfNoEntry: false })) continue;
     mkdirSync(path.dirname(link), { recursive: true });
-    symlinkSync(path.join(ROOT, "skills", "agent-hub"), link);
+    symlinkSync(path.join(ROOT, "skills", "agent-autoloop"), link);
   }
 }
 
 /** What to type to run this program: its name if that's what a shell finds, otherwise where it is. */
 function howToRun() {
-  const found = spawnSync("/bin/sh", ["-c", "command -v agent-hub"], { encoding: "utf8" }).stdout.trim();
-  if (found && realpathSync(found) === realpathSync(PROGRAM)) return "agent-hub";
+  const found = spawnSync("/bin/sh", ["-c", "command -v agent-autoloop"], { encoding: "utf8" }).stdout.trim();
+  if (found && realpathSync(found) === realpathSync(PROGRAM)) return "agent-autoloop";
   return /\s/.test(PROGRAM) ? `'${PROGRAM}'` : PROGRAM;
 }
 
@@ -198,7 +198,7 @@ async function join(args: string[]) {
   const [url] = rest;
   const name = text(named.worker);
   const key = text(named.key);
-  if (!url || !name || !key) return fail("用法：agent-hub join <中台地址> --worker <名字> --key <密钥>");
+  if (!url || !name || !key) return fail("用法：agent-autoloop join <中台地址> --worker <名字> --key <密钥>");
   writeConfig({ url, worker: { name, key } });
   if (!named["no-service"]) installService();
   console.log(`这台电脑以 ${name} 的身份接活了。`);
@@ -218,7 +218,7 @@ function showCard(card: Card) {
 }
 
 const howToAnswer = (card: Card) =>
-  card.kind === "ask" ? `回答：agent-hub answer ${card.id} <序号>` : `处理完了：agent-hub answer ${card.id}`;
+  card.kind === "ask" ? `回答：agent-autoloop answer ${card.id} <序号>` : `处理完了：agent-autoloop answer ${card.id}`;
 
 async function chooseAt(terminal: ReturnType<typeof createInterface>, card: Card) {
   for (;;) {
@@ -235,7 +235,7 @@ async function tryIt() {
   const stamp = Date.now();
   await client(config.source.key, config)
     .event({ id: `try-${stamp}`, type: "try.start", subject: `#${stamp}` })
-    .catch((error) => fail(`连不上中台（${error.message}）：先 agent-hub up 或 agent-hub service install`));
+    .catch((error) => fail(`连不上中台（${error.message}）：先 agent-autoloop up 或 agent-autoloop service install`));
   console.log("事件发出去了，Agent 开始干活……");
   let asked: number | null = null;
   for (let i = 0; i < 300; i++) {
@@ -245,7 +245,7 @@ async function tryIt() {
       (run: { rule: string; state: string; attempts: number; error: string }) =>
         run.rule === "试一下" && run.state === "queued" && run.attempts > 0,
     );
-    if (failed) return fail(`Agent 没跑成：${failed.error}\n运行 agent-hub doctor 看看。`);
+    if (failed) return fail(`Agent 没跑成：${failed.error}\n运行 agent-autoloop doctor 看看。`);
     if (asked === null) {
       const card: Card | undefined = state.cards.find(
         (open: Card) => open.kind === "ask" && open.title.startsWith("试跑"),
@@ -255,7 +255,7 @@ async function tryIt() {
       console.log("\nAgent 结束了这一轮，问了你一个问题。它现在不占进程、不花 Token。");
       showCard(card);
       if (!process.stdin.isTTY) {
-        console.log(`${howToAnswer(card)}\n答完运行 agent-hub status，能看到它接着把活干完。`);
+        console.log(`${howToAnswer(card)}\n答完运行 agent-autoloop status，能看到它接着把活干完。`);
         return;
       }
       const terminal = createInterface({ input: process.stdin, output: process.stdout });
@@ -275,7 +275,7 @@ async function tryIt() {
       return;
     }
   }
-  fail("五分钟没等到结果。运行 agent-hub doctor 看看。");
+  fail("五分钟没等到结果。运行 agent-autoloop doctor 看看。");
 }
 
 const RUN_STATES: Record<string, string> = {
@@ -345,7 +345,7 @@ async function status() {
 async function answer(args: string[]) {
   const { named, rest } = flags(args);
   const card = Number(rest[0]);
-  if (!Number.isInteger(card) || card < 1) return fail("用法：agent-hub answer <卡片> [序号] [--text 别的想法]");
+  if (!Number.isInteger(card) || card < 1) return fail("用法：agent-autoloop answer <卡片> [序号] [--text 别的想法]");
   const words = text(named.text);
   const done = await ownerClient().answer(card, {
     ...(rest[1] !== undefined && { choice: Number(rest[1]) - 1 }),
@@ -363,7 +363,7 @@ async function answer(args: string[]) {
 async function resolve(args: string[]) {
   const [id, ...words] = args;
   const card = Number(id);
-  if (!Number.isInteger(card) || card < 1 || !words.length) return fail("用法：agent-hub resolve <卡片> <结果>");
+  if (!Number.isInteger(card) || card < 1 || !words.length) return fail("用法：agent-autoloop resolve <卡片> <结果>");
   const { changed } = await ownerClient().resolve(card, words.join(" "));
   console.log(changed ? "结案了。" : "这张卡片已经处理过了，这次没有改动。");
 }
@@ -375,7 +375,7 @@ async function doctor() {
     if (!ok) bad += 1;
   };
   say(Number(process.versions.node.split(".")[0]) >= 24, `Node ${process.versions.node}`);
-  if (!existsSync(CONFIG_FILE)) return say(false, "还没装好：运行 agent-hub init");
+  if (!existsSync(CONFIG_FILE)) return say(false, "还没装好：运行 agent-autoloop init");
   const config = readConfig();
   if (config.hub) {
     const { parseRules } = await importRules();
@@ -386,7 +386,7 @@ async function doctor() {
       say(false, (error as Error).message);
     }
   }
-  say(serviceRunning(), serviceRunning() ? "系统服务在跑" : "系统服务没在跑：agent-hub service install");
+  say(serviceRunning(), serviceRunning() ? "系统服务在跑" : "系统服务没在跑：agent-autoloop service install");
   try {
     const health = await (await fetch(`${config.url}/healthz`, { signal: AbortSignal.timeout(5000) })).json();
     say(health.ok === true, `中台 ${config.url}（${String(health.commit).slice(0, 12)}）`);
@@ -408,9 +408,9 @@ async function doctor() {
         }
       }
       for (const channel of state.channels) say(channel.online, `${channel.name}${channel.online ? "在线" : "不在线"}`);
-      const manual = path.join(ROOT, "skills", "agent-hub", "SKILL.md");
+      const manual = path.join(ROOT, "skills", "agent-autoloop", "SKILL.md");
       if (!state.channels.length) {
-        console.log(`○ 还没接通道：Agent 问你时不会主动告诉你，要自己运行 agent-hub status 看。接法见 ${manual}`);
+        console.log(`○ 还没接通道：Agent 问你时不会主动告诉你，要自己运行 agent-autoloop status 看。接法见 ${manual}`);
       } else if (state.channels.length === 1 && state.channels[0].id === "desktop") {
         console.log(
           "○ 只接了桌面通知：Agent 问你时只有这台电脑会弹通知，人不在电脑前、或者电脑没有图形界面就看不到。" +
@@ -453,7 +453,7 @@ async function key(args: string[]) {
     return;
   }
   if (action !== "new" || !["source", "worker", "channel", "owner"].includes(kind) || !name) {
-    return fail("用法：agent-hub key new <source|worker|channel|owner> <名字>");
+    return fail("用法：agent-autoloop key new <source|worker|channel|owner> <名字>");
   }
   console.log(addKey(kind as "source", name));
 }
@@ -461,7 +461,7 @@ async function key(args: string[]) {
 async function emit(args: string[]) {
   const { named, rest } = flags(args);
   const config = readConfig();
-  const type = rest[0] ?? fail("用法：agent-hub emit <类型>");
+  const type = rest[0] ?? fail("用法：agent-autoloop emit <类型>");
   const secret = text(named.key) ?? config.source?.key ?? fail("这台电脑上没有来源的密钥：用 --key");
   const answer = await client(secret, config).event({
     id: text(named.id) ?? randomUUID(),
@@ -477,7 +477,7 @@ async function emit(args: string[]) {
 async function tell(args: string[]) {
   const { named, rest } = flags(args);
   const config = readConfig();
-  const matter = rest[0] ?? fail("用法：agent-hub tell <编号> [--task 定时任务名]，内容从标准输入读");
+  const matter = rest[0] ?? fail("用法：agent-autoloop tell <编号> [--task 定时任务名]，内容从标准输入读");
   const words = readFileSync(0, "utf8").trim();
   if (!words) return fail("要说的话从标准输入传，不能为空。");
   const task = text(named.task);
@@ -497,8 +497,8 @@ async function why(args: string[]) {
 
 async function checkConformance(args: string[]) {
   const { named, rest } = flags(args);
-  const file = text(named.config) ?? process.env.AGENT_HUB_CONFORMANCE;
-  if (!rest[0] || !file) return fail("用法：agent-hub conformance <测试中台地址> --config <测试凭据文件>");
+  const file = text(named.config) ?? process.env.AGENT_AUTOLOOP_CONFORMANCE;
+  if (!rest[0] || !file) return fail("用法：agent-autoloop conformance <测试中台地址> --config <测试凭据文件>");
   const { conformance } = await import("../protocol/conformance.ts");
   console.log(JSON.stringify(await conformance(rest[0], JSON.parse(readFileSync(file, "utf8"))), null, 2));
 }
@@ -511,12 +511,12 @@ async function stop(args: string[]) {
 function service(args: string[]) {
   if (args[0] === "install") return installService();
   if (args[0] === "remove") return removeService();
-  fail("用法：agent-hub service install|remove");
+  fail("用法：agent-autoloop service install|remove");
 }
 
 /** A plugin is a folder of its own under this install, named after its repository. */
 function addPlugin(args: string[]) {
-  const url = args[0] ?? fail("用法：agent-hub add <git 地址>");
+  const url = args[0] ?? fail("用法：agent-autoloop add <git 地址>");
   const name = url
     .replace(/\/$/, "")
     .split(/[/:]/)

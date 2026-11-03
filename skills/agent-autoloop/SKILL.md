@@ -1,21 +1,21 @@
 ---
-name: agent-hub
+name: agent-autoloop
 description: 配置 Agent 自动化中台：加规则、接新的事件插件、接新的 Agent、接新的通道（飞书、QQ、钉钉、企微……）、写处理手册、部署到服务器、多台电脑。用户说“有事的时候让 Agent 自己处理”“每天几点让 Agent 做某事”“接一下 GitHub / 告警 / 某个系统”“换一个模型”“在飞书里批”“加一台电脑”时用。
 ---
 
 # Agent 自动化中台
 
-协议全文在 `docs/protocol.md`，这里是怎么做。程序在 `~/.agent-hub/app`，规则在 `~/.agent-hub/rules.json`，配置和密钥在 `~/.agent-hub/config.json`。
+协议全文在 `docs/protocol.md`，这里是怎么做。程序在 `~/.agent-autoloop/app`，规则在 `~/.agent-autoloop/rules.json`，配置和密钥在 `~/.agent-autoloop/config.json`。
 
 ## 看情况、回答
 
-`agent-hub status` 列出谁在线、等用户什么、在做什么、做过什么，还有今天和最近 7 天的轮数、Token 和费用（费用只算 Agent 上报了的，没上报的轮数会写出来）。`agent-hub answer <卡片> <序号>` 回答，`agent-hub resolve <卡片> <结果>` 结案，`agent-hub stop <第几轮>` 停掉一轮。
+`agent-autoloop status` 列出谁在线、等用户什么、在做什么、做过什么，还有今天和最近 7 天的轮数、Token 和费用（费用只算 Agent 上报了的，没上报的轮数会写出来）。`agent-autoloop answer <卡片> <序号>` 回答，`agent-autoloop resolve <卡片> <结果>` 结案，`agent-autoloop stop <第几轮>` 停掉一轮。
 
 这里没有网页。用户想要一个页面看全局，就替他写一个：读 `GET /v1/state`，密钥是 `config.json` 的 `owner`，请求见 `docs/protocol.md` 的「本人」一节。
 
 ## 改规则
 
-改 `rules.json`，运行 `agent-hub check`。几秒内生效；写错了旧规则继续跑，并推一张卡片说错在哪。
+改 `rules.json`，运行 `agent-autoloop check`。几秒内生效；写错了旧规则继续跑，并推一张卡片说错在哪。
 
 每条规则回答五个问题：什么事件（`when`），交给谁（`to`），在哪（`cwd`），照什么做（`skill`、`prompt`），要不要告诉用户（`tell`，默认只在有卡片时）。
 
@@ -26,7 +26,7 @@ description: 配置 Agent 自动化中台：加规则、接新的事件插件、
 
 - 同一个对象的事件要分开处理、互不等待，就写 `parallel`。
 - 默认的先问清单是 `askFirst`，用户说什么事必须先问他，就改这里。
-- 用户在别的地方定时跑的任务（Claude、Codex 应用里），写进 `elsewhere`，只在 `agent-hub status` 里列出来；它们要找用户时运行 `agent-hub tell <编号> --task <任务名>`，内容从标准输入传。
+- 用户在别的地方定时跑的任务（Claude、Codex 应用里），写进 `elsewhere`，只在 `agent-autoloop status` 里列出来；它们要找用户时运行 `agent-autoloop tell <编号> --task <任务名>`，内容从标准输入传。
 
 用户想接自动化时先从例子改，不要从零写：`examples/recipes/` 里有早报（`morning-brief`）、处理 GitHub issue（`github-issues`）和线上报错（`ops-alerts`），每个都有规则、Skill 和写明权限原因的 README。要写新的 Agent、通道或事件插件，看教程 `docs/plugins.md` 和最小例子 `examples/plugins/`。
 
@@ -41,8 +41,8 @@ description: 配置 Agent 自动化中台：加规则、接新的事件插件、
 
 有三种：
 
-1. **对方能发 HTTP**：`agent-hub key new source <名字>` 拿密钥（这是新建密钥，先问用户），`rules.json` 的 `sources` 登记，对方 `POST /v1/events`。
-2. **对方有自己的 Webhook 格式**：在 `~/.agent-hub/plugins/<名字>/source.ts` 写一个函数，验签并翻译成事件（见 `plugins/github/source.ts`），来源写 `"adapter": "<名字>"`，地址是 `/v1/in/<来源>`，秘密放 `~/.agent-hub/secrets.env` 的 `AGENT_HUB_SECRET_<来源>`。对方要能连到中台，所以中台要在服务器上，或者用隧道。
+1. **对方能发 HTTP**：`agent-autoloop key new source <名字>` 拿密钥（这是新建密钥，先问用户），`rules.json` 的 `sources` 登记，对方 `POST /v1/events`。
+2. **对方有自己的 Webhook 格式**：在 `~/.agent-autoloop/plugins/<名字>/source.ts` 写一个函数，验签并翻译成事件（见 `plugins/github/source.ts`），来源写 `"adapter": "<名字>"`，地址是 `/v1/in/<来源>`，秘密放 `~/.agent-autoloop/secrets.env` 的 `AGENT_AUTOLOOP_SECRET_<来源>`。对方要能连到中台，所以中台要在服务器上，或者用隧道。
 3. **对方推不过来，或者中台在家里**：定时跑一段脚本轮询，见 `examples/watch-github-issues.sh`。规则用 `use: "command"` 的 Agent，写上 `emits`。没新东西不花 Token。
 
 ## 接一个 Agent
@@ -53,19 +53,19 @@ description: 配置 Agent 自动化中台：加规则、接新的事件插件、
 "hermes": { "name": "Hermes", "worker": "这台电脑", "use": "command", "command": ["hermes", "chat", "-Q", "-q", "{prompt}"] }
 ```
 
-退出码不是 0 算没跑成。要会话接续、打开会话的链接和用量统计，在 `~/.agent-hub/plugins/<名字>/agent.ts` 写一个插件（照 `plugins/codex/agent.ts`）：`command` 给命令行，`read` 从输出读最后一条消息和会话，`link` 给链接。
+退出码不是 0 算没跑成。要会话接续、打开会话的链接和用量统计，在 `~/.agent-autoloop/plugins/<名字>/agent.ts` 写一个插件（照 `plugins/codex/agent.ts`）：`command` 给命令行，`read` 从输出读最后一条消息和会话，`link` 给链接。
 
 `access` 默认 `edit`，专用插件翻译成对应 CLI 的权限；`command` 只传参数，不替任意程序限制权限，按该 CLI 文档配置。要完整权限、不审批的话写 `full`，先和用户说清楚。
 
-第三方仓库根目录放 `agent.ts`、`channel.ts` 或 `source.ts`，用 `agent-hub add <git 地址>` 安装到 `~/.agent-hub/plugins/<仓库名>`。同名本机插件优先于内置插件，不自动更新。插件是可信代码，先读再装。
+第三方仓库根目录放 `agent.ts`、`channel.ts` 或 `source.ts`，用 `agent-autoloop add <git 地址>` 安装到 `~/.agent-autoloop/plugins/<仓库名>`。同名本机插件优先于内置插件，不自动更新。插件是可信代码，先读再装。
 
 ACP 用 `use: "acp"` 和 `command: ["ACP 服务程序"]`，支持 v1 的会话新建、恢复、文字与一次性权限请求；先在该 Agent 自己的 CLI 登录。普通命令接法与实测支持范围见 README。
 
 ## 接一个通道
 
-配置在两处：`rules.json` 的 `channels` 登记（`answerers` 是谁能回答），`config.json` 的 `channels` 写密钥和选项。`agent-hub key new channel <名字>` 拿密钥（先问用户）。改了 `config.json` 要 `agent-hub service install` 重启。
+配置在两处：`rules.json` 的 `channels` 登记（`answerers` 是谁能回答），`config.json` 的 `channels` 写密钥和选项。`agent-autoloop key new channel <名字>` 拿密钥（先问用户）。改了 `config.json` 要 `agent-autoloop service install` 重启。
 
-**桌面通知**：新装的中台默认开着（`plugins/desktop/channel.ts`），两处各有一个 `desktop`。卡片第一次发送时，macOS 用 `osascript`、Linux 用 `notify-send` 弹一条通知，标题为“Agent 问你一个问题”，正文是卡片标题和“运行 agent-hub status 查看”，不能在通知上回答。没有图形会话时安静跳过，问题仍在；通知命令失败时报告失败，不会让中台退出。接了别的通道可以留着它；不想要就把两处的 `desktop` 都删掉，再重启。以前装的中台不会自动加上它。
+**桌面通知**：新装的中台默认开着（`plugins/desktop/channel.ts`），两处各有一个 `desktop`。卡片第一次发送时，macOS 用 `osascript`、Linux 用 `notify-send` 弹一条通知，标题为“Agent 问你一个问题”，正文是卡片标题和“运行 agent-autoloop status 查看”，不能在通知上回答。没有图形会话时安静跳过，问题仍在；通知命令失败时报告失败，不会让中台退出。接了别的通道可以留着它；不想要就把两处的 `desktop` 都删掉，再重启。以前装的中台不会自动加上它。
 
 **飞书**：用官方的 `lark-cli`。`npm i -g @larksuite/cli`，`lark-cli config init --new` 建一个应用（用户扫码），在开发者后台给应用开机器人能力，并订阅卡片回传交互（长连接）。然后：
 
@@ -80,7 +80,7 @@ ACP 用 `use: "acp"` 和 `command: ["ACP 服务程序"]`，支持 v1 的会话�
 
 **只会发文字的（钉钉、企微的群机器人，Slack、Discord 的 Webhook）**：用 `plugins/webhook/channel.ts`，`config.json` 的通道项写 `"use": "webhook"`、`"platform": "dingtalk"` 和 `"url": "已有的 Webhook 地址"`；平台也可选 `wecom`、`slack`、`discord`。`rules.json` 里写 `"links": true`，卡片链接本身就能回答。
 
-**有按钮的新通道**：在 `~/.agent-hub/plugins/<名字>/channel.ts` 写一个，照 `plugins/feishu/channel.ts`：循环领卡片、发或改、报告；收到点击转给 `hub.answer`。协议在 `docs/protocol.md`，用别的语言写也行，只要会发 HTTP。
+**有按钮的新通道**：在 `~/.agent-autoloop/plugins/<名字>/channel.ts` 写一个，照 `plugins/feishu/channel.ts`：循环领卡片、发或改、报告；收到点击转给 `hub.answer`。协议在 `docs/protocol.md`，用别的语言写也行，只要会发 HTTP。
 
 ## 交付流水线
 
@@ -105,7 +105,7 @@ ACP 用 `use: "acp"` 和 `command: ["ACP 服务程序"]`，支持 v1 的会话�
 {
   "sources": { "github": { "name": "GitHub" } },
   "agents": {
-    "poll": { "name": "查看交付标签", "worker": "mac-mini", "use": "command", "command": ["node", "/绝对路径/agent-hub/plugins/delivery/poll.ts", "owner/app"] },
+    "poll": { "name": "查看交付标签", "worker": "mac-mini", "use": "command", "command": ["node", "/绝对路径/agent-autoloop/plugins/delivery/poll.ts", "owner/app"] },
     "delivery": { "name": "交付", "worker": "mac-mini", "use": "delivery", "command": ["owner/app"], "timeout": 35 }
   },
   "channels": {},
@@ -121,7 +121,7 @@ ACP 用 `use: "acp"` 和 `command: ["ACP 服务程序"]`，支持 v1 的会话�
 项目 Ship 只在 main 的 push 上运行，检出完整历史（checkout 的 `fetch-depth: 0`），然后调用这个仓库的 Action。把下面的占位提交换成发布后核实的完整 SHA：
 
 ```yaml
-- uses: KKKKhazix/agent-hub/plugins/delivery@<完整提交编号>
+- uses: KKKKhazix/agent-autoloop/plugins/delivery@<完整提交编号>
   id: scope
 - if: steps.scope.outputs.release == 'true' && steps.scope.outputs.superseded != 'true'
   run: ./项目已有的发布命令
@@ -131,25 +131,25 @@ ACP 用 `use: "acp"` 和 `command: ["ACP 服务程序"]`，支持 v1 的会话�
 
 ## MCP 与密钥撤销
 
-MCP 客户端的启动程序填 `node`，参数为本机引擎绝对路径 `bin/agent-hub.ts`、`mcp`，环境里传 `AGENT_HUB_HOME`。支持 stdio 2025-11-25 版，使用本机 `config.json` 已有密钥，不把密钥写进客户端参数。工具按已有身份显示；不自动创建权限。
+MCP 客户端的启动程序填 `node`，参数为本机引擎绝对路径 `bin/agent-autoloop.ts`、`mcp`，环境里传 `AGENT_AUTOLOOP_HOME`。支持 stdio 2025-11-25 版，使用本机 `config.json` 已有密钥，不把密钥写进客户端参数。工具按已有身份显示；不自动创建权限。
 
-`agent-hub key remove <source|worker|channel|owner> <名字>` 立即收回对应密钥，长轮询和日志订阅也立即失效；已经领到的活仍可用这一轮的独立 token 交结果。
+`agent-autoloop key remove <source|worker|channel|owner> <名字>` 立即收回对应密钥，长轮询和日志订阅也立即失效；已经领到的活仍可用这一轮的独立 token 交结果。
 
 ## 放到服务器、加电脑
 
 手机要批卡片、别人的 Webhook 要进来时，把中台放到一台有公网的机器上：
 
-1. 服务器上 `sh install.sh --no-service`，`config.json` 里 `hub.listen` 用 `127.0.0.1:3350`，`hub.publicUrl` 写公网地址，去掉 `worker`，再 `agent-hub service install`。前面放一个做 HTTPS 的反向代理（Caddy、nginx）。
-2. 每台干活的电脑：服务器上 `agent-hub key new worker <名字>`，电脑上 `agent-hub join https://中台地址 --worker <名字> --key <密钥>`。`rules.json` 的 Agent 写上对应的 `worker`。
+1. 服务器上 `sh install.sh --no-service`，`config.json` 里 `hub.listen` 用 `127.0.0.1:3350`，`hub.publicUrl` 写公网地址，去掉 `worker`，再 `agent-autoloop service install`。前面放一个做 HTTPS 的反向代理（Caddy、nginx）。
+2. 每台干活的电脑：服务器上 `agent-autoloop key new worker <名字>`，电脑上 `agent-autoloop join https://中台地址 --worker <名字> --key <密钥>`。`rules.json` 的 Agent 写上对应的 `worker`。
 
 电脑不用开放任何端口，它们自己连过去。
 
 ## 日志与恢复
 
-接插件先在专用测试中台验证：`agent-hub conformance <地址> --config <测试凭据文件>`。文件里的 `keys` 分别放来源、接单程序、通道、本人密钥；`eventType` 匹配测试规则，`answerer` 在测试通道的允许名单内。检查会写事件和卡片，不指向正在用的中台。协议类型在 `protocol/schema.json`。
+接插件先在专用测试中台验证：`agent-autoloop conformance <地址> --config <测试凭据文件>`。文件里的 `keys` 分别放来源、接单程序、通道、本人密钥；`eventType` 匹配测试规则，`answerer` 在测试通道的允许名单内。检查会写事件和卡片，不指向正在用的中台。协议类型在 `protocol/schema.json`。
 
-`kernel/` 不读时钟、不取随机数。`evolve` 更新视图，`commit` 在 WAL + FULL 事务里追加事实，提交后才应答。`agent-hub why 42` 查一轮的事件、规则和回执；`GET /v1/stream?after=42` 供本人客户端按序号续读。备份要一起保留 `hub.db` 和权限为 0600 的 `master.key`；后者推导轮次和卡片链接的 token。普通访问密钥只保存哈希。
+`kernel/` 不读时钟、不取随机数。`evolve` 更新视图，`commit` 在 WAL + FULL 事务里追加事实，提交后才应答。`agent-autoloop why 42` 查一轮的事件、规则和回执；`GET /v1/stream?after=42` 供本人客户端按序号续读。备份要一起保留 `hub.db` 和权限为 0600 的 `master.key`；后者推导轮次和卡片链接的 token。普通访问密钥只保存哈希。
 
 ## 版本与卸载
 
-`agent-hub --version` 显示版本和提交。`agent-hub uninstall` 确认后删除自身程序、链接和服务，规则、密钥和记录保留；`--yes` 只跳过确认。
+`agent-autoloop --version` 显示版本和提交。`agent-autoloop uninstall` 确认后删除自身程序、链接和服务，规则、密钥和记录保留；`--yes` 只跳过确认。

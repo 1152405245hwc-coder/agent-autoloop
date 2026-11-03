@@ -1,4 +1,4 @@
-// The whole loop, with nothing faked but the agent: a real `agent-hub up` in its own process, from `init` on, through the
+// The whole loop, with nothing faked but the agent: a real `agent-autoloop up` in its own process, from `init` on, through the
 // protocol as everything else speaks it. An event comes in; the agent runs and asks; the owner answers from the command line;
 // the agent goes on and finishes. Failure cases: init leaves something out; `up` doesn't start, or starts twice; the run isn't
 // started in its folder; the question doesn't reach the owner; `status` doesn't show what to do about it; the answer doesn't
@@ -24,8 +24,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 
-const home = mkdtempSync(join(tmpdir(), "agent-hub-loop-"));
-const bin = join(import.meta.dirname, "..", "bin", "agent-hub.ts");
+const home = mkdtempSync(join(tmpdir(), "agent-autoloop-loop-"));
+const bin = join(import.meta.dirname, "..", "bin", "agent-autoloop.ts");
 // `init` turns on the desktop channel: these stand in for the commands that would really show something.
 const notifiers = join(home, "notifiers");
 const notified = join(home, "notified.txt");
@@ -38,12 +38,12 @@ for (const name of ["osascript", "notify-send"]) {
 }
 const env: NodeJS.ProcessEnv = {
   ...process.env,
-  AGENT_HUB_HOME: home,
+  AGENT_AUTOLOOP_HOME: home,
   DISPLAY: ":99",
   PATH: `${notifiers}:${process.env.PATH}`,
 };
-delete env.AGENT_HUB_RULES;
-delete env.AGENT_HUB_PUBLIC_URL;
+delete env.AGENT_AUTOLOOP_RULES;
+delete env.AGENT_AUTOLOOP_PUBLIC_URL;
 const cli = (...args: string[]) =>
   spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", bin, ...args], {
     env,
@@ -66,13 +66,13 @@ writeFileSync(
   script,
   `#!/bin/sh
 # Asks on its first go; with an answer in the context file, finishes. Asked to, it only says something.
-if grep -q 'card.answered' "$AGENT_HUB_CONTEXT"; then
+if grep -q 'card.answered' "$AGENT_AUTOLOOP_CONTEXT"; then
   echo "你选了绿色，做完了"
-elif grep -q 'hello.notice' "$AGENT_HUB_CONTEXT"; then
+elif grep -q 'hello.notice' "$AGENT_AUTOLOOP_CONTEXT"; then
   cat <<'END'
 说了一声
 
-${fence}agent-hub
+${fence}agent-autoloop
 {"notice":[{"title":"留意一下","text":"磁盘快满了","key":"disk"}]}
 ${fence}
 END
@@ -81,7 +81,7 @@ else
   cat <<'END'
 问了一个问题
 
-${fence}agent-hub
+${fence}agent-autoloop
 {"ask":[{"title":"试跑：选一个颜色","text":"选哪个都行","options":["蓝色","绿色"],"recommend":1,"key":"color"}]}
 ${fence}
 END
@@ -151,7 +151,7 @@ test("one machine, one command: an event, a question, an answer, the work done",
   assert.match(waiting.stdout, /等你 1/);
   assert.match(waiting.stdout, new RegExp(`#${card.id} 试跑：选一个颜色`));
   assert.match(waiting.stdout, /2\. 绿色（推荐）/);
-  assert.match(waiting.stdout, new RegExp(`agent-hub answer ${card.id} `));
+  assert.match(waiting.stdout, new RegExp(`agent-autoloop answer ${card.id} `));
 
   assert.equal(cli("answer", String(card.id), "7").status, 1, "there's no seventh option");
   const answered = cli("answer", String(card.id), "2");
@@ -165,7 +165,7 @@ test("one machine, one command: an event, a question, an answer, the work done",
   assert.equal(finished.recentCards[0].by, "本人");
   assert.deepEqual(
     readFileSync(notified, "utf8").trim().split("\n"),
-    ["试跑：选一个颜色", "运行 agent-hub status 查看"],
+    ["试跑：选一个颜色", "运行 agent-autoloop status 查看"],
     "once, and not for the answer",
   );
   assert.match(cli("answer", String(card.id), "1").stdout, /已经/);
@@ -183,14 +183,14 @@ test("one machine, one command: an event, a question, an answer, the work done",
   cli("emit", "hello.notice");
   const noticed = await until((s) => s.cards.some((c: any) => c.kind === "notice"));
   const notice = noticed.cards.find((c: any) => c.kind === "notice");
-  assert.match(cli("status").stdout, new RegExp(`处理完了：agent-hub answer ${notice.id}`));
+  assert.match(cli("status").stdout, new RegExp(`处理完了：agent-autoloop answer ${notice.id}`));
   assert.match(cli("answer", String(notice.id)).stdout, /结案了/);
 
   // Nobody at a terminal, as when an Agent is installing it: `try` says what's being asked and how to answer, and doesn't wait.
   const tried = cli("try");
   assert.equal(tried.status, 0, tried.stderr);
   assert.match(tried.stdout, /试跑：选一个颜色/);
-  const id = /agent-hub answer (\d+) /.exec(tried.stdout)![1];
+  const id = /agent-autoloop answer (\d+) /.exec(tried.stdout)![1];
   const resolved = cli("resolve", id, "不试了");
   assert.match(resolved.stdout, /结案了/);
   assert.equal((await state()).recentCards.find((c: any) => c.id === Number(id)).result, "不试了");
@@ -199,12 +199,12 @@ test("one machine, one command: an event, a question, an answer, the work done",
 });
 
 test("the user's Agents are shown how to set it up, when this is the install in its usual place, and nothing of theirs is touched", () => {
-  const person = mkdtempSync(join(tmpdir(), "agent-hub-person-"));
+  const person = mkdtempSync(join(tmpdir(), "agent-autoloop-person-"));
   mkdirSync(join(person, ".claude"));
-  mkdirSync(join(person, ".codex", "skills", "agent-hub"), { recursive: true });
-  writeFileSync(join(person, ".codex", "skills", "agent-hub", "SKILL.md"), "their own");
+  mkdirSync(join(person, ".codex", "skills", "agent-autoloop"), { recursive: true });
+  writeFileSync(join(person, ".codex", "skills", "agent-autoloop", "SKILL.md"), "their own");
   const usual: NodeJS.ProcessEnv = { ...env, HOME: person };
-  delete usual.AGENT_HUB_HOME;
+  delete usual.AGENT_AUTOLOOP_HOME;
   const done = spawnSync(
     process.execPath,
     ["--disable-warning=ExperimentalWarning", bin, "init", "--no-service", "--command", "true"],
@@ -212,12 +212,12 @@ test("the user's Agents are shown how to set it up, when this is the install in 
   );
   assert.equal(done.status, 0, done.stderr);
   assert.equal(
-    realpathSync(join(person, ".claude", "skills", "agent-hub")),
-    realpathSync(join(import.meta.dirname, "..", "skills", "agent-hub")),
+    realpathSync(join(person, ".claude", "skills", "agent-autoloop")),
+    realpathSync(join(import.meta.dirname, "..", "skills", "agent-autoloop")),
   );
-  assert.ok(lstatSync(join(person, ".claude", "skills", "agent-hub")).isSymbolicLink());
-  assert.equal(readFileSync(join(person, ".codex", "skills", "agent-hub", "SKILL.md"), "utf8"), "their own");
-  assert.ok(existsSync(join(person, ".agent-hub", "config.json")));
+  assert.ok(lstatSync(join(person, ".claude", "skills", "agent-autoloop")).isSymbolicLink());
+  assert.equal(readFileSync(join(person, ".codex", "skills", "agent-autoloop", "SKILL.md"), "utf8"), "their own");
+  assert.ok(existsSync(join(person, ".agent-autoloop", "config.json")));
   rmSync(person, { recursive: true, force: true });
   assert.ok(!existsSync(join(home, ".claude")), "an install somewhere else leaves the user's Agents alone");
 });

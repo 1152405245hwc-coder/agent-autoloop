@@ -26,7 +26,7 @@ test("MCP stdio initializes and exposes only the typed hub operations", async ()
       source: { name: "app", key: "source-key" },
     }),
   );
-  const child = spawn(process.execPath, ["bin/agent-hub.ts", "mcp"], {
+  const child = spawn(process.execPath, ["bin/agent-autoloop.ts", "mcp"], {
     cwd: join(import.meta.dirname, ".."),
     env: process.env,
     stdio: ["pipe", "pipe", "pipe"],

@@ -1,5 +1,5 @@
 // Anything with a print mode: its command line in rules.json, its last message on stdout. A script is an agent too, and
-// a plain command needn't take the prompt at all: it finds what it needs through the environment (AGENT_HUB_CONTEXT).
+// a plain command needn't take the prompt at all: it finds what it needs through the environment (AGENT_AUTOLOOP_CONTEXT).
 import { tail, type Adapter } from "../../worker/agents.ts";
 
 export default {

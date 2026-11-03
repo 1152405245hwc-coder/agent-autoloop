@@ -17,7 +17,7 @@ EVENTS=$(gh issue list --repo "$REPO" --state open --limit 30 ${SEARCH:+--search
   --jq 'map({id: ("issue-" + (.number|tostring)), type: "issues.opened", subject: ("#" + (.number|tostring)), summary: .title[0:200], detail: .body[0:4000], link: .url})')
 echo "看了 $REPO 最近的 issue"
 echo
-echo '```agent-hub'
+echo '```agent-autoloop'
 # Not echo: /bin/sh's echo turns the \n and \\ inside the JSON into real ones.
 printf '{"events":%s}\n' "$EVENTS"
 echo '```'

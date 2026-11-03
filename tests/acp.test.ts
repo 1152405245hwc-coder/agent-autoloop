@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { permission } from "../plugins/acp/bridge.ts";
-const home = mkdtempSync(join(tmpdir(), "agent-hub-acp-"));
+const home = mkdtempSync(join(tmpdir(), "agent-autoloop-acp-"));
 after(() => rmSync(home, { recursive: true, force: true }));
 const fake = join(home, "fake.mjs");
 writeFileSync(

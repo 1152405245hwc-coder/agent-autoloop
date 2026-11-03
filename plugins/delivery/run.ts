@@ -1,4 +1,4 @@
-// One delivery run: `node run.ts owner/name`, reading its event from AGENT_HUB_CONTEXT and printing a receipt.
+// One delivery run: `node run.ts owner/name`, reading its event from AGENT_AUTOLOOP_CONTEXT and printing a receipt.
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,7 +11,7 @@ const hasLabel = (issue: any, name: string) => issue.labels.some((label: any) =>
 
 export async function run(repo: string, context: any, testLocalHealth = false) {
   const number = subjectNumber(repo, context);
-  const folder = mkdtempSync(join(tmpdir(), "agent-hub-delivery-"));
+  const folder = mkdtempSync(join(tmpdir(), "agent-autoloop-delivery-"));
   const io = createIO(repo, folder);
   try {
     const issue = await io.api(`issues/${number}`);
@@ -21,7 +21,7 @@ export async function run(repo: string, context: any, testLocalHealth = false) {
         await io.api(`issues/${number}/labels/ask-owner`, undefined, "DELETE");
         return "已记录处理结果";
       }
-      return `有一件事需要你处理\n${FENCE}agent-hub\n${JSON.stringify({ ask: [question(issue)] })}\n${FENCE}`;
+      return `有一件事需要你处理\n${FENCE}agent-autoloop\n${JSON.stringify({ ask: [question(issue)] })}\n${FENCE}`;
     }
     const result = await deliver(repo, number, io, testLocalHealth);
     return deliveryReceipt(number, result, hasLabel(issue, "deliver-attended"));
@@ -37,7 +37,7 @@ export async function run(repo: string, context: any, testLocalHealth = false) {
 
 if (import.meta.main) {
   const [repo, ...args] = process.argv.slice(2);
-  const context = JSON.parse(readFileSync(process.env.AGENT_HUB_CONTEXT!, "utf8"));
+  const context = JSON.parse(readFileSync(process.env.AGENT_AUTOLOOP_CONTEXT!, "utf8"));
   run(repo, context, args.includes("--test-local-health"))
     .then((text) => console.log(text))
     .catch((error) => {

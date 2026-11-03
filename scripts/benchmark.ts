@@ -12,8 +12,8 @@ if (process.argv.includes("--server")) {
   const fixture = JSON.parse(readFileSync(new URL("../tests/rules.fixture.json", import.meta.url), "utf8"));
   fixture.rules = fixture.rules.filter((rule: { when: { cron?: string } }) => !rule.when.cron);
   fixture.elsewhere = [];
-  process.env.AGENT_HUB_RULES = join(process.env.AGENT_HUB_HOME!, "rules.json");
-  writeFileSync(process.env.AGENT_HUB_RULES, JSON.stringify(fixture));
+  process.env.AGENT_AUTOLOOP_RULES = join(process.env.AGENT_AUTOLOOP_HOME!, "rules.json");
+  writeFileSync(process.env.AGENT_AUTOLOOP_RULES, JSON.stringify(fixture));
   const { serve } = await import("../host/http.ts");
   const { keepKeyHash } = await import("../host/runtime.ts");
   const { db } = await import("../host/runtime.ts");
@@ -49,13 +49,13 @@ if (process.argv.includes("--server")) {
   });
 } else {
   const { spawn } = await import("node:child_process");
-  const home = mkdtempSync(join(tmpdir(), "agent-hub-bench-"));
+  const home = mkdtempSync(join(tmpdir(), "agent-autoloop-bench-"));
   const start = performance.now();
   const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", import.meta.filename, "--server"], {
     env: {
       ...process.env,
-      AGENT_HUB_HOME: home,
-      AGENT_HUB_RULES: join(import.meta.dirname, "../tests/rules.fixture.json"),
+      AGENT_AUTOLOOP_HOME: home,
+      AGENT_AUTOLOOP_RULES: join(import.meta.dirname, "../tests/rules.fixture.json"),
     },
     stdio: ["ignore", "pipe", "inherit", "ipc"],
   });

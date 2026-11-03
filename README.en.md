@@ -1,4 +1,4 @@
-# Agent Hub
+# Agent Autoloop
 
 Let agents follow work through to completion, and bring you in when a decision is yours to make.
 
@@ -24,13 +24,13 @@ Works on macOS and Linux. You need Node 24, Git, GitHub CLI signed in with acces
 Install the program, configuration, and desktop notifications:
 
 ```bash
-gh api repos/KKKKhazix/agent-hub/contents/install.sh -H 'Accept: application/vnd.github.raw+json' | sh
+gh api repos/KKKKhazix/agent-autoloop/contents/install.sh -H 'Accept: application/vnd.github.raw+json' | sh
 ```
 
 Try a complete question, answer, and continuation with your own agent:
 
 ```bash
-agent-hub try
+agent-autoloop try
 ```
 
 This is actual output from Codex in a non-interactive terminal:
@@ -44,11 +44,11 @@ Agent 结束了这一轮，问了你一个问题。它现在不占进程、不�
 这是一次试跑，选哪个都行。
   1. 蓝色
   2. 绿色
-回答：agent-hub answer 1 <序号>
-答完运行 agent-hub status，能看到它接着把活干完。
+回答：agent-autoloop answer 1 <序号>
+答完运行 agent-autoloop status，能看到它接着把活干完。
 ```
 
-Run `agent-hub answer 1 2` to choose green. Then `agent-hub status` shows “你选了绿色，试跑通过” — the agent continued and finished the trial. In an interactive terminal, enter the choice directly.
+Run `agent-autoloop answer 1 2` to choose green. Then `agent-autoloop status` shows “你选了绿色，试跑通过” — the agent continued and finished the trial. In an interactive terminal, enter the choice directly.
 
 ## Rules
 
@@ -71,16 +71,16 @@ Schedules use the same rules file:
 { "name": "Morning brief", "when": { "cron": "0 9 * * *" }, "to": "codex", "cwd": "~/notes", "prompt": "Write today's brief." }
 ```
 
-Edit `~/.agent-hub/rules.json` and run `agent-hub check`. Changes take effect within seconds; invalid edits leave the previous rules running and tell you what needs fixing.
+Edit `~/.agent-autoloop/rules.json` and run `agent-autoloop check`. Changes take effect within seconds; invalid edits leave the previous rules running and tell you what needs fixing.
 
 ## The agent has one job
 
-Print a final message. Put the conclusion on its first line and any actions for the hub in an `agent-hub` block:
+Print a final message. Put the conclusion on its first line and any actions for the hub in an `agent-autoloop` block:
 
 ````text
 Order checked. There is enough stock.
 
-```agent-hub
+```agent-autoloop
 { "ask": [{ "title": "How should we deliver it?", "text": "Both options are available.", "options": ["Courier", "Pickup"], "key": "shipping" }] }
 ```
 ````
@@ -89,7 +89,7 @@ Omit the block when no follow-up is needed. A receipt can also notify you, close
 
 ## Why it works this way
 
-**One log.** Accepted changes are recorded as append-only facts, and current state is rebuilt from that log. Run `agent-hub why 1` to trace a round from its trigger to its result:
+**One log.** Accepted changes are recorded as append-only facts, and current state is rebuilt from that log. Run `agent-autoloop why 1` to trace a round from its trigger to its result:
 
 ```text
 第 1 轮 · 演示
@@ -99,9 +99,9 @@ Omit the block when no follow-up is needed. A receipt can also notify you, close
 11-03 20:47:25  结束：演示完成
 ```
 
-Run the reproduction commands below from the program directory, `~/.agent-hub/app`.
+Run the reproduction commands below from the program directory, `~/.agent-autoloop/app`.
 
-**One deterministic kernel.** It makes no outbound requests, reads no clock, and uses no randomness. The same inputs produce the same result, so network loss, crashes, and duplicate requests can be simulated in memory and reproduced from a seed:
+**One deterministic kernel.** The Autoloop kernel makes no outbound requests, reads no clock, and uses no randomness. The same inputs produce the same result, so network loss, crashes, and duplicate requests can be simulated in memory and reproduced from a seed:
 
 ```bash
 node sim/random.ts 24301 200000
@@ -153,9 +153,9 @@ Idle memory and memory under a thousand concurrent connections are measured sepa
 
 Use `use: "command"` and split the command into a `command` array; `{prompt}` stays a single argument, never shell source. Write an [agent plugin](docs/plugins.md#agent-插件) when you need conversation recovery, usage reporting, or a permission mapping.
 
-**Channels bring decisions to you.** Desktop notifications are enabled by default. Feishu uses card buttons; DingTalk, WeCom, Slack, and Discord use text with an answer link. The CLI also works on its own through `agent-hub status` and `agent-hub answer`.
+**Channels bring decisions to you.** Desktop notifications are enabled by default. Feishu uses card buttons; DingTalk, WeCom, Slack, and Discord use text with an answer link. The CLI also works on its own through `agent-autoloop status` and `agent-autoloop answer`.
 
-Feishu has been verified with real sends, button clicks, and card updates; the group webhook templates have only been tested against fake services. Clients supporting stdio MCP 2025-11-25 can use `agent-hub mcp` to inspect, trace, answer, and manage work.
+Feishu has been verified with real sends, button clicks, and card updates; the group webhook templates have only been tested against fake services. Clients supporting stdio MCP 2025-11-25 can use `agent-autoloop mcp` to inspect, trace, answer, and manage work.
 
 ## Start with a recipe
 
@@ -167,7 +167,7 @@ Feishu has been verified with real sends, button clicks, and card updates; the g
 
 Add the `deliver` label to a PR. The delivery plugin reviews it, waits for checks, merges, waits for Ship, and verifies the deployed version at the health endpoint. Configuration comes from main; PR code, tests, and configuration are never executed on the worker.
 
-It uses the hub's queue, concurrency, and retries. See [delivery configuration](skills/agent-hub/SKILL.md#交付流水线).
+It uses the hub's queue, concurrency, and retries. See [delivery configuration](skills/agent-autoloop/SKILL.md#交付流水线).
 
 ## No dashboard
 
@@ -195,7 +195,7 @@ This is not a product of those providers and is not endorsed by them.
 ## Documentation
 
 - [Installation](INSTALL.md)
-- [Configuration](skills/agent-hub/SKILL.md)
+- [Configuration](skills/agent-autoloop/SKILL.md)
 - [Writing plugins](docs/plugins.md)
 - [Protocol](docs/protocol.md)
 - [Security boundaries](SECURITY.md)

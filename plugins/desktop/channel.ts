@@ -1,11 +1,11 @@
 // The channel a new install starts with: a notification on this computer that there's something to look at. It can't take
-// an answer; `agent-hub status` shows the card and `agent-hub answer` answers it.
+// an answer; `agent-autoloop status` shows the card and `agent-autoloop answer` answers it.
 //   "channels": { "desktop": { "key": "…" } } in config.json
 //   "channels": { "desktop": { "name": "桌面通知" } } in rules.json
 import { execFile, spawnSync } from "node:child_process";
 import type { Card, ChannelContext } from "../../host/channels.ts";
 
-const WORDS = "运行 agent-hub status 查看";
+const WORDS = "运行 agent-autoloop status 查看";
 const TITLE = "Agent 问你一个问题";
 const APPLESCRIPT = ["on run argv", "display notification (item 2 of argv) with title (item 1 of argv)", "end run"];
 

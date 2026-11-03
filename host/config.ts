@@ -17,7 +17,7 @@ export type Config = {
 export const CONFIG_FILE = path.join(HOME, "config.json");
 
 export function readConfig(): Config {
-  if (!existsSync(CONFIG_FILE)) throw new Error("还没装好：先运行 agent-hub init");
+  if (!existsSync(CONFIG_FILE)) throw new Error("还没装好：先运行 agent-autoloop init");
   return JSON.parse(readFileSync(CONFIG_FILE, "utf8")) as Config;
 }
 

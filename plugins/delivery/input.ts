@@ -32,7 +32,7 @@ export function deliveryReceipt(number: number, result: Delivered, attended: boo
   const text = result.findings.map((finding) => `${finding.title}：${finding.text}`).join("\n");
   if (attended) return `${result.summary}\n${text}`;
   const notice = { key: `review-${number}`, title: "交付前需要修复问题", text: [...text].slice(0, 1500).join("") };
-  return `${result.summary}\n\`\`\`agent-hub\n${JSON.stringify({ notice: [notice] })}\n\`\`\``;
+  return `${result.summary}\n\`\`\`agent-autoloop\n${JSON.stringify({ notice: [notice] })}\n\`\`\``;
 }
 
 export function pendingEvents(

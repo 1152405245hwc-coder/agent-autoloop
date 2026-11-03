@@ -28,7 +28,7 @@ export default function ({ headers, body, secret }) {
   return JSON.parse(body).items;
 }`,
 );
-process.env.AGENT_HUB_SECRET_HOOKS = "hook-secret";
+process.env.AGENT_AUTOLOOP_SECRET_HOOKS = "hook-secret";
 const { serve } = await import("../host/http.ts");
 const { addKey } = await import("../host/runtime.ts");
 const { all, one } = await import("../host/runtime.ts");
@@ -237,7 +237,7 @@ test("a channel comes for cards, reports them, and passes on who answered; the l
 test("the owner's key reads everything, answers, resolves and stops; nothing else does, and there's no sign-in", async () => {
   assert.equal((await call("/v1/login/code", { key: keys.owner, body: {} })).status, 404);
   assert.equal((await call("/login?code=x", { redirect: "manual" })).status, 404);
-  assert.equal((await call("/v1/state", { headers: { cookie: "agent_hub_session=x" } })).status, 401);
+  assert.equal((await call("/v1/state", { headers: { cookie: "agent_autoloop_session=x" } })).status, 401);
   assert.ok(Array.isArray((await call("/v1/state", { key: keys.owner })).json.runs));
 
   await call("/v1/events", { key: keys.app, body: note(50) });

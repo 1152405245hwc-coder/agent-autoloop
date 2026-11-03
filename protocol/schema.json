@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:agent-hub:protocol:v1",
+  "$id": "urn:agent-autoloop:protocol:v1",
   "$defs": {
     "event": {
       "type": "object",

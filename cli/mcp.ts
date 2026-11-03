@@ -1,4 +1,4 @@
-// `agent-hub mcp`: the hub's doors as MCP tools over stdio, using the keys already in this machine's config.json.
+// `agent-autoloop mcp`: the hub's doors as MCP tools over stdio, using the keys already in this machine's config.json.
 import { createInterface } from "node:readline";
 import { readConfig } from "../host/config.ts";
 import { hubClient, type Hub } from "../protocol/client.ts";
@@ -116,7 +116,7 @@ export async function mcp() {
         continue;
       }
       initialized = true;
-      const serverInfo = { name: "agent-hub", version: "0.1.0" };
+      const serverInfo = { name: "agent-autoloop", version: "0.1.0" };
       reply(id, { result: { protocolVersion: "2025-11-25", capabilities: { tools: {} }, serverInfo } });
     } else if (method === "ping") reply(id, { result: {} });
     else if (!ready) refuse(id, -32600, "先完成 initialize");

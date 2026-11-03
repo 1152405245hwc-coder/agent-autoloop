@@ -1,6 +1,6 @@
 # 安全
 
-发现安全问题，请用 GitHub 的 [Security Advisories](https://github.com/KKKKhazix/agent-hub/security/advisories/new) 私下告诉我，不要开公开的 issue。
+发现安全问题，请用 GitHub 的 [Security Advisories](https://github.com/KKKKhazix/agent-autoloop/security/advisories/new) 私下告诉我，不要开公开的 issue。
 
 ## 边界
 
@@ -13,7 +13,7 @@
 
 ## 插件与交付
 
-插件是安装者信任的本地代码，安装目录的同名插件优先；`agent-hub add` 只克隆，不运行安装脚本，但之后加载入口就会执行它。事件不能指定插件、仓库、命令或权限。
+插件是安装者信任的本地代码，安装目录的同名插件优先；`agent-autoloop add` 只克隆，不运行安装脚本，但之后加载入口就会执行它。事件不能指定插件、仓库、命令或权限。
 
 ACP 的授权依赖 Agent 遵守协议。桥接只按结构化工具种类、编辑路径与一次性选项作决定，不提供文件或终端服务。MCP 使用本机已有身份，只提供协议列出的七种操作。撤销密钥立即终止其长轮询和日志订阅；轮次 token 独立。
 
@@ -27,4 +27,4 @@ ACP 的授权依赖 Agent 遵守协议。桥接只按结构化工具种类、编
 
 门的权限、通道回答人和原消息、轮次 token 的范围、重复回执与卡片回答都有行为和一致性检查。`sim/invariants.ts` 是模拟与穷举共用的不变量；夜间检查另外对真实 SQLite 进程做 SIGKILL。范围是进程崩溃和有限场景，不等同于断电恢复证明或完整安全审计。
 
-`kernel/` 不读时钟、不取随机数。`evolve` 更新视图，`commit` 在 WAL + FULL 事务里追加事实，提交后才应答。`agent-hub why 42` 查一轮的事件、规则和回执；`GET /v1/stream?after=42` 供本人客户端按序号续读。备份要一起保留 `hub.db` 和权限为 0600 的 `master.key`；后者推导轮次和卡片链接的 token。普通访问密钥只保存哈希。
+`kernel/` 不读时钟、不取随机数。`evolve` 更新视图，`commit` 在 WAL + FULL 事务里追加事实，提交后才应答。`agent-autoloop why 42` 查一轮的事件、规则和回执；`GET /v1/stream?after=42` 供本人客户端按序号续读。备份要一起保留 `hub.db` 和权限为 0600 的 `master.key`；后者推导轮次和卡片链接的 token。普通访问密钥只保存哈希。

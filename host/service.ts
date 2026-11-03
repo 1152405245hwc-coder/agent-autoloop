@@ -6,12 +6,12 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { HOME } from "./home.ts";
 
-const PROGRAM = path.join(import.meta.dirname, "..", "bin", "agent-hub.ts");
-/** Another install on this machine (another AGENT_HUB_HOME) has a service of its own. */
+const PROGRAM = path.join(import.meta.dirname, "..", "bin", "agent-autoloop.ts");
+/** Another install on this machine (another AGENT_AUTOLOOP_HOME) has a service of its own. */
 const label = () =>
-  HOME === path.join(homedir(), ".agent-hub")
-    ? "agent-hub"
-    : `agent-hub-${createHash("sha256").update(HOME).digest("hex").slice(0, 8)}`;
+  HOME === path.join(homedir(), ".agent-autoloop")
+    ? "agent-autoloop"
+    : `agent-autoloop-${createHash("sha256").update(HOME).digest("hex").slice(0, 8)}`;
 const plistFile = () => path.join(homedir(), "Library/LaunchAgents", `${label()}.plist`);
 const unitFile = () => path.join(homedir(), ".config/systemd/user", `${label()}.service`);
 const xml = (text: string) => text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
@@ -22,7 +22,7 @@ export function plist() {
   const searchPath = [path.dirname(process.execPath), ...systemPaths].join(":");
   const program = [process.execPath, "--disable-warning=ExperimentalWarning", PROGRAM, "up"];
   const programArguments = program.map((part) => `<string>${xml(part)}</string>`).join("");
-  const homeEntry = `<key>AGENT_HUB_HOME</key><string>${xml(HOME)}</string>`;
+  const homeEntry = `<key>AGENT_AUTOLOOP_HOME</key><string>${xml(HOME)}</string>`;
   const pathEntry = `<key>PATH</key><string>${xml(searchPath)}</string>`;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -44,7 +44,7 @@ export function unit() {
 Description=Agent 自动化中台
 
 [Service]
-Environment=AGENT_HUB_HOME=${HOME}
+Environment=AGENT_AUTOLOOP_HOME=${HOME}
 ExecStart=${process.execPath} --disable-warning=ExperimentalWarning ${PROGRAM} up
 Restart=always
 RestartSec=10
@@ -101,7 +101,7 @@ export function runningUp() {
       stdio: ["ignore", "pipe", "ignore"],
     });
   } catch {}
-  return /agent-hub(\.ts)? up\b/.test(command) ? Number(pid) : null;
+  return /agent-autoloop(\.ts)? up\b/.test(command) ? Number(pid) : null;
 }
 
 /** Stopping a service returns before its process is gone, and one started by hand has no service to stop it. */

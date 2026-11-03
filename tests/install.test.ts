@@ -1,7 +1,7 @@
 // install.sh, in a throwaway home with a PATH made of nothing but temporary folders. The program it sets up is a copy of this
 // one and `git` is a stand-in that makes that copy, so nothing needs committing and no real folder can be written to. Failure
-// cases: the command goes somewhere that isn't on PATH, so `agent-hub` isn't found right after installing; someone's own
-// agent-hub is overwritten; with nowhere to put it, or someone else's coming first, the next step printed doesn't work; the next
+// cases: the command goes somewhere that isn't on PATH, so `agent-autoloop` isn't found right after installing; someone's own
+// agent-autoloop is overwritten; with nowhere to put it, or someone else's coming first, the next step printed doesn't work; the next
 // step says `try` when nothing has been started; it asks for sudo; the Node advice can't be followed as written, leaving out
 // that Homebrew's node@24 isn't on PATH; running it again redoes the setup, or installs a service after --no-service.
 import assert from "node:assert/strict";
@@ -26,7 +26,7 @@ import { after, test } from "node:test";
 
 const repo = join(import.meta.dirname, "..");
 const script = join(repo, "install.sh");
-const dir = realpathSync(mkdtempSync(join(tmpdir(), "agent-hub-install-")));
+const dir = realpathSync(mkdtempSync(join(tmpdir(), "agent-autoloop-install-")));
 const copy = join(dir, "the-program");
 for (const part of ["bin", "cli", "host", "kernel", "plugins", "protocol", "skills", "worker", "package.json"]) {
   cpSync(join(repo, part), join(copy, part), { recursive: true });
@@ -63,8 +63,8 @@ if [ "$1" = clone ]; then for target; do :; done; cp -R "${copy}" "$target"; mkd
   if (node === "old") executable(join(tools, "node"), `[ "$1" = -v ] && echo v22.1.0 || exit 1`);
   chmodSync(tools, 0o555);
   locked.push(tools);
-  const hub = join(person, ".agent-hub");
-  const program = join(hub, "app", "bin", "agent-hub.ts");
+  const hub = join(person, ".agent-autoloop");
+  const program = join(hub, "app", "bin", "agent-autoloop.ts");
   const local = join(person, ".local", "bin");
   const run = (path: string[], args = ["--no-service", "--command", "true", "--port", "3999"], shell = "/bin/sh") => {
     const env: NodeJS.ProcessEnv = { HOME: person, PATH: [...path, tools].join(":") };
@@ -88,9 +88,9 @@ test("the command goes in ~/.local/bin when that's on PATH, even behind another 
   const other = made(it.folder("other"));
   const done = it.run([other, it.local]);
   assert.equal(done.status, 0, done.stderr);
-  assert.equal(readlinkSync(join(it.local, "agent-hub")), it.program);
-  assert.ok(!isLink(join(other, "agent-hub")));
-  assert.match(done.stdout, /先运行 agent-hub up 启动中台，再开一个终端运行 agent-hub try/);
+  assert.equal(readlinkSync(join(it.local, "agent-autoloop")), it.program);
+  assert.ok(!isLink(join(other, "agent-autoloop")));
+  assert.match(done.stdout, /先运行 agent-autoloop up 启动中台，再开一个终端运行 agent-autoloop try/);
   assert.doesNotMatch(done.stdout, /alias/);
 });
 
@@ -98,7 +98,7 @@ test("the same goes for dash, which is what sh is on Ubuntu", { skip: !existsSyn
   const it = computer();
   const done = it.run([it.local], undefined, "/bin/dash");
   assert.equal(done.status, 0, done.stderr);
-  assert.ok(isLink(join(it.local, "agent-hub")));
+  assert.ok(isLink(join(it.local, "agent-autoloop")));
   assert.doesNotMatch(done.stdout, /alias/);
 });
 
@@ -108,30 +108,30 @@ test("with ~/.local/bin not on PATH it goes in the first place that is, and leav
   const second = made(it.folder("second"));
   const done = it.run(["relative/bin", ".", it.folder("not-there"), first, second]);
   assert.equal(done.status, 0, done.stderr);
-  assert.equal(readlinkSync(join(first, "agent-hub")), it.program);
+  assert.equal(readlinkSync(join(first, "agent-autoloop")), it.program);
   assert.ok(!existsSync(it.local));
-  assert.ok(!isLink(join(second, "agent-hub")));
-  assert.match(done.stdout, /agent-hub try/);
+  assert.ok(!isLink(join(second, "agent-autoloop")));
+  assert.match(done.stdout, /agent-autoloop try/);
   assert.doesNotMatch(done.stdout, /alias/);
 });
 
-test("someone's own agent-hub stays as it was, and the next step doesn't send them to it", () => {
+test("someone's own agent-autoloop stays as it was, and the next step doesn't send them to it", () => {
   const it = computer();
   const theirs = made(it.local);
-  executable(join(theirs, "agent-hub"), "echo their own");
+  executable(join(theirs, "agent-autoloop"), "echo their own");
   const after = made(it.folder("after"));
   const done = it.run([theirs, after]);
   assert.equal(done.status, 0, done.stderr);
-  assert.match(readFileSync(join(theirs, "agent-hub"), "utf8"), /echo their own/);
-  assert.equal(readlinkSync(join(after, "agent-hub")), it.program);
+  assert.match(readFileSync(join(theirs, "agent-autoloop"), "utf8"), /echo their own/);
+  assert.equal(readlinkSync(join(after, "agent-autoloop")), it.program);
   assert.match(done.stdout, new RegExp(`先运行 ${it.program} up`));
-  assert.match(done.stdout, new RegExp(`alias agent-hub='${it.program}'`));
+  assert.match(done.stdout, new RegExp(`alias agent-autoloop='${it.program}'`));
 
   const linked = computer();
   const place = made(linked.local);
-  symlinkSync(join(place, "somewhere-else"), join(place, "agent-hub"));
+  symlinkSync(join(place, "somewhere-else"), join(place, "agent-autoloop"));
   assert.equal(linked.run([place]).status, 0);
-  assert.equal(readlinkSync(join(place, "agent-hub")), join(place, "somewhere-else"));
+  assert.equal(readlinkSync(join(place, "agent-autoloop")), join(place, "somewhere-else"));
 });
 
 test(
@@ -143,7 +143,7 @@ test(
     assert.equal(done.status, 0, done.stderr);
     assert.ok(!existsSync(it.local));
     assert.match(done.stdout, new RegExp(`先运行 ${it.program} up 启动中台，再开一个终端运行 ${it.program} try`));
-    assert.match(done.stdout, new RegExp(`alias agent-hub='${it.program}'`));
+    assert.match(done.stdout, new RegExp(`alias agent-autoloop='${it.program}'`));
     assert.doesNotMatch(readFileSync(script, "utf8"), /sudo/);
   },
 );
@@ -152,8 +152,8 @@ test("the next step is try alone when a service has been started", () => {
   const it = computer();
   const done = it.run([it.local], ["--command", "true", "--port", "3999"]);
   assert.equal(done.status, 0, done.stderr);
-  assert.match(done.stdout, /运行 agent-hub try 跑一遍完整流程/);
-  assert.doesNotMatch(done.stdout, /agent-hub up/);
+  assert.match(done.stdout, /运行 agent-autoloop try 跑一遍完整流程/);
+  assert.doesNotMatch(done.stdout, /agent-autoloop up/);
 });
 
 for (const [node, words] of [
@@ -192,7 +192,7 @@ test("running it again updates and doesn't set anything up over what's there", (
   assert.match(kept.stdout, /更新好了/);
   assert.equal(readFileSync(join(it.hub, "rules.json"), "utf8"), "my rules");
   assert.equal(readFileSync(join(it.hub, "config.json"), "utf8"), config);
-  assert.equal(readlinkSync(join(it.local, "agent-hub")), it.program);
+  assert.equal(readlinkSync(join(it.local, "agent-autoloop")), it.program);
   assert.deepEqual(readFileSync(it.called, "utf8").trim().split("\n"), [
     `git -C ${join(it.hub, "app")} pull --ff-only --quiet`,
   ]);

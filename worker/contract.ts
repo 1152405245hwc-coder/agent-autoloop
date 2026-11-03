@@ -9,7 +9,7 @@ import { parseResult, type Result } from "../protocol/validate.ts";
 const FAILED = ["没跑成", "FAILED"];
 const NOTHING = ["没事可做", "NOTHING"];
 const RECEIPT_FIELDS = ["ask", "notice", "resolve", "later", "events"];
-const BLOCK = /```agent-hub[ \t]*\r?\n([\s\S]*?)```/g;
+const BLOCK = /```agent-autoloop[ \t]*\r?\n([\s\S]*?)```/g;
 const unique = <T>(items: T[]) => [...new Set(items)];
 
 function describeEvent({ sourceName, type, subject, link }: Job["context"]["events"][number]) {
@@ -49,8 +49,8 @@ export function promptFor(job: Job, contextFile: string) {
     "- 其余：一句话说做成了什么。",
     "",
     "需要中台做事时，在最后一条消息的末尾附一个回执：" +
-      "一个标记为 agent-hub 的代码块，里面是 JSON，用不到的字段不写；什么都不需要就不附。",
-    "```agent-hub",
+      "一个标记为 agent-autoloop 的代码块，里面是 JSON，用不到的字段不写；什么都不需要就不附。",
+    "```agent-autoloop",
     `{"ask":[{"title":"一句话说要决定什么","text":"三行以内","options":["选项一","选项二"],"recommend":0,\
 "about":"留给接着干的自己：背景，每个选项具体怎么做","key":"这件事的固定名字"}],
  "notice":[{"title":"一句话","text":"非他亲自做不可的事：要他做什么"}],
@@ -67,7 +67,7 @@ export function promptFor(job: Job, contextFile: string) {
 
 export const repairPrompt = (problem: string) =>
   `你上一条消息的回执读不懂（${problem}）。你做过的事不要重做，也不要调用任何工具，` +
-  "只把最后一条消息按格式重写一遍：第一行是结论，末尾一个标记为 agent-hub 的代码块，里面是合法的 JSON。";
+  "只把最后一条消息按格式重写一遍：第一行是结论，末尾一个标记为 agent-autoloop 的代码块，里面是合法的 JSON。";
 
 type Message = {
   outcome: "done" | "nothing" | "failed";

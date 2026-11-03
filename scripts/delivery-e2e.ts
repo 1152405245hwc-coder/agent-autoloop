@@ -15,14 +15,14 @@ assert.ok(
   repo && /^[\w.-]+\/[\w.-]+$/.test(repo) && flag === "--run",
   "用法：node scripts/delivery-e2e.ts owner/name --run（会创建并删除这个私有仓库）",
 );
-const root = mkdtempSync(join(tmpdir(), "agent-hub-delivery-e2e-"));
+const root = mkdtempSync(join(tmpdir(), "agent-autoloop-delivery-e2e-"));
 const work = join(root, "seed");
 const home = join(root, "hub");
 const engine = join(import.meta.dirname, "..");
 mkdirSync(work);
 mkdirSync(home);
-process.env.AGENT_HUB_HOME = home;
-process.env.AGENT_HUB_RULES = join(home, "rules.json");
+process.env.AGENT_AUTOLOOP_HOME = home;
+process.env.AGENT_AUTOLOOP_RULES = join(home, "rules.json");
 const { gh, github } = await import("../plugins/delivery/github.ts");
 const { poll } = await import("../plugins/delivery/poll.ts");
 const git = (...args: string[]) =>
@@ -33,7 +33,7 @@ const write = (name: string, text: string) => {
 };
 const commit = (message: string) => {
   git("add", "-A");
-  git("-c", "user.name=Agent Hub Test", "-c", "user.email=test@example.invalid", "commit", "-m", message);
+  git("-c", "user.name=Agent Autoloop Test", "-c", "user.email=test@example.invalid", "commit", "-m", message);
   return git("rev-parse", "HEAD");
 };
 let live = "0".repeat(40);
@@ -124,7 +124,7 @@ jobs:
 `,
   );
   live = commit("初始化临时交付测试项目");
-  gh(["repo", "create", repo, "--private", "--description", "agent-hub 临时交付测试"]);
+  gh(["repo", "create", repo, "--private", "--description", "agent-autoloop 临时交付测试"]);
   created = true;
   assert.equal(JSON.parse(gh(["repo", "view", repo, "--json", "isPrivate"])).isPrivate, true);
   git("remote", "add", "origin", `https://github.com/${repo}.git`);
@@ -157,7 +157,7 @@ jobs:
   gh(["pr", "edit", String(number), "--repo", repo, "--add-label", "deliver,deliver-attended"]);
   console.log(JSON.stringify({ stage: "labelled", repo, number, head }));
   writeFileSync(
-    process.env.AGENT_HUB_RULES,
+    process.env.AGENT_AUTOLOOP_RULES,
     JSON.stringify({
       sources: { github: { name: "GitHub" } },
       agents: {

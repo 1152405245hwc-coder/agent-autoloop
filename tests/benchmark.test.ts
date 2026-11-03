@@ -62,12 +62,16 @@ test("dispatch latency includes waking an already waiting worker", async () => {
 });
 
 test("the benchmark server has no scheduled work competing with measured events", async () => {
-  const home = mkdtempSync(join(tmpdir(), "agent-hub-benchmark-setup-"));
+  const home = mkdtempSync(join(tmpdir(), "agent-autoloop-benchmark-setup-"));
   const child = spawn(
     process.execPath,
     ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "../scripts/benchmark.ts"), "--server"],
     {
-      env: { ...process.env, AGENT_HUB_HOME: home, AGENT_HUB_RULES: join(import.meta.dirname, "rules.fixture.json") },
+      env: {
+        ...process.env,
+        AGENT_AUTOLOOP_HOME: home,
+        AGENT_AUTOLOOP_RULES: join(import.meta.dirname, "rules.fixture.json"),
+      },
       stdio: ["ignore", "pipe", "pipe", "ipc"],
     },
   );

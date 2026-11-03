@@ -27,7 +27,7 @@ const cli = async (...args: string[]) =>
   (
     await promisify(execFile)(
       process.execPath,
-      ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "../bin/agent-hub.ts"), ...args],
+      ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "../bin/agent-autoloop.ts"), ...args],
       { env: { ...process.env, TZ: "Asia/Taipei" } },
     )
   ).stdout;

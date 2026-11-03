@@ -24,7 +24,7 @@ test("Codex ignores developer configuration and only reads the review snapshot",
   assert.ok(!policy.includes(".ssh"));
 });
 test("review uses main's points and a text-only snapshot; ordinary internal docs skip the reviewer", async () => {
-  const root = mkdtempSync(join(tmpdir(), "agent-hub-review-"));
+  const root = mkdtempSync(join(tmpdir(), "agent-autoloop-review-"));
   try {
     const repo = join(root, "repo");
     const snap = join(root, "snapshot");

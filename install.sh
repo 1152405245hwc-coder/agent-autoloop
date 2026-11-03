@@ -1,10 +1,10 @@
 #!/bin/sh
-# Installs Agent 自动化中台: a clone in ~/.agent-hub/app, with nothing to build and nothing else to install.
+# Installs Agent 自动化中台: a clone in ~/.agent-autoloop/app, with nothing to build and nothing else to install.
 set -e
-REPO="${AGENT_HUB_REPO:-https://github.com/KKKKhazix/agent-hub.git}"
-ROOT="${AGENT_HUB_HOME:-$HOME/.agent-hub}"
+REPO="${AGENT_AUTOLOOP_REPO:-https://github.com/KKKKhazix/agent-autoloop.git}"
+ROOT="${AGENT_AUTOLOOP_HOME:-$HOME/.agent-autoloop}"
 APP="$ROOT/app"
-PROGRAM="$APP/bin/agent-hub.ts"
+PROGRAM="$APP/bin/agent-autoloop.ts"
 
 need_node() {
   echo "$1"
@@ -28,16 +28,16 @@ node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)
 mkdir -p "$ROOT"
 if [ -d "$APP/.git" ]; then git -C "$APP" pull --ff-only --quiet; else git clone --quiet --depth 1 -- "$REPO" "$APP"; fi
 
-# Only a folder that's on PATH makes `agent-hub` work, and an agent-hub that isn't this one is someone else's to keep.
+# Only a folder that's on PATH makes `agent-autoloop` work, and an agent-autoloop that isn't this one is someone else's to keep.
 place_link() {
   case ":$PATH:" in *":$1:"*) ;; *) return 1 ;; esac
   case "$1" in /*) ;; *) return 1 ;; esac
   if [ "$1" = "$HOME/.local/bin" ]; then mkdir -p "$1" 2>/dev/null || return 1; fi
   [ -d "$1" ] && [ -w "$1" ] || return 1
-  if [ -e "$1/agent-hub" ] || [ -L "$1/agent-hub" ]; then
-    [ -L "$1/agent-hub" ] && [ "$1/agent-hub" -ef "$PROGRAM" ] || return 1
+  if [ -e "$1/agent-autoloop" ] || [ -L "$1/agent-autoloop" ]; then
+    [ -L "$1/agent-autoloop" ] && [ "$1/agent-autoloop" -ef "$PROGRAM" ] || return 1
   fi
-  ln -sf "$PROGRAM" "$1/agent-hub"
+  ln -sf "$PROGRAM" "$1/agent-autoloop"
 }
 
 usual_ifs=$IFS
@@ -56,9 +56,9 @@ else
   "$PROGRAM" init "$@"
 fi
 
-if ! [ "$(command -v agent-hub)" -ef "$PROGRAM" ]; then
+if ! [ "$(command -v agent-autoloop)" -ef "$PROGRAM" ]; then
   echo
-  echo "直接打 agent-hub 运行不了这个程序：PATH 上没有能放它的目录，或者排在前面的是另一个同名程序。"
+  echo "直接打 agent-autoloop 运行不了这个程序：PATH 上没有能放它的目录，或者排在前面的是另一个同名程序。"
   echo "要写完整路径 $PROGRAM，或者把这一行加进 ~/.zshrc（用 bash 就是 ~/.bashrc）："
-  echo "  alias agent-hub='$PROGRAM'"
+  echo "  alias agent-autoloop='$PROGRAM'"
 fi

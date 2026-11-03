@@ -1,4 +1,4 @@
-// Failure modes: a recipe's rules don't pass `agent-hub check`, or check would pass anything; a rule names a Skill the
+// Failure modes: a recipe's rules don't pass `agent-autoloop check`, or check would pass anything; a rule names a Skill the
 // recipe doesn't ship, or the README doesn't say where to put it; a README promises one access level while the rules give
 // another; the curl in ops-alerts no longer reaches its rule, or the outside system's key can set off the restart; the
 // issue watcher prints something the worker can't read (a body's line break or backslash breaking its JSON), or an event
@@ -16,25 +16,32 @@ import { readMessage, resultFrom } from "../worker/contract.ts";
 const ROOT = join(import.meta.dirname, "..");
 const RECIPES = join(ROOT, "examples", "recipes");
 const NAMES = ["morning-brief", "github-issues", "ops-alerts"];
-const scratch = mkdtempSync(join(tmpdir(), "agent-hub-recipes-"));
+const scratch = mkdtempSync(join(tmpdir(), "agent-autoloop-recipes-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 const cleanEnv = () =>
   Object.fromEntries(
-    Object.entries(process.env).filter(([name]) => !name.startsWith("AGENT_HUB_")),
+    Object.entries(process.env).filter(([name]) => !name.startsWith("AGENT_AUTOLOOP_")),
   ) as NodeJS.ProcessEnv;
-const agentHub = (args: string[], env: NodeJS.ProcessEnv) =>
-  spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", join(ROOT, "bin", "agent-hub.ts"), ...args], {
-    env: { ...cleanEnv(), ...env },
-    encoding: "utf8",
-  });
+const agentAutoloop = (args: string[], env: NodeJS.ProcessEnv) =>
+  spawnSync(
+    process.execPath,
+    ["--disable-warning=ExperimentalWarning", join(ROOT, "bin", "agent-autoloop.ts"), ...args],
+    {
+      env: { ...cleanEnv(), ...env },
+      encoding: "utf8",
+    },
+  );
 const readRules = (name: string) => JSON.parse(readFileSync(join(RECIPES, name, "rules.json"), "utf8"));
 const readDoc = (name: string) => readFileSync(join(RECIPES, name, "README.md"), "utf8");
 const check = (rulesFile: string) =>
-  agentHub(["check"], { AGENT_HUB_RULES: rulesFile, AGENT_HUB_HOME: mkdtempSync(join(scratch, "home-")) });
+  agentAutoloop(["check"], {
+    AGENT_AUTOLOOP_RULES: rulesFile,
+    AGENT_AUTOLOOP_HOME: mkdtempSync(join(scratch, "home-")),
+  });
 
 for (const name of NAMES) {
-  test(`${name}: agent-hub check passes its rules`, () => {
+  test(`${name}: agent-autoloop check passes its rules`, () => {
     const checked = check(join(RECIPES, name, "rules.json"));
     assert.equal(checked.status, 0, checked.stderr);
   });
@@ -58,7 +65,7 @@ for (const name of NAMES) {
   });
 }
 
-test("agent-hub check refuses a recipe that was changed for the worse", () => {
+test("agent-autoloop check refuses a recipe that was changed for the worse", () => {
   const broken = readRules("morning-brief");
   broken.rules[0].to = "nobody";
   const file = join(scratch, "broken.json");
@@ -79,14 +86,14 @@ async function freePort() {
 test("ops-alerts: the curl in the README reaches the rule, and that key can't set off the restart", async () => {
   const home = mkdtempSync(join(scratch, "ops-"));
   const port = await freePort();
-  const env = { AGENT_HUB_HOME: home };
+  const env = { AGENT_AUTOLOOP_HOME: home };
   writeFileSync(join(home, "rules.json"), readFileSync(join(RECIPES, "ops-alerts", "rules.json")));
-  const key = agentHub(["key", "new", "source", "shop"], env).stdout.trim().split("\n").at(-1)!;
+  const key = agentAutoloop(["key", "new", "source", "shop"], env).stdout.trim().split("\n").at(-1)!;
   const url = `http://127.0.0.1:${port}`;
   writeFileSync(join(home, "config.json"), JSON.stringify({ url, hub: { listen: `127.0.0.1:${port}` } }));
   const hub = spawn(
     process.execPath,
-    ["--disable-warning=ExperimentalWarning", join(ROOT, "bin", "agent-hub.ts"), "up"],
+    ["--disable-warning=ExperimentalWarning", join(ROOT, "bin", "agent-autoloop.ts"), "up"],
     { env: { ...cleanEnv(), ...env }, stdio: "ignore" },
   );
   try {

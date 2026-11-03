@@ -25,7 +25,7 @@ const shell = (file: string, key: string, extra: Record<string, string> = {}) =>
   new Promise<{ code: number | null; out: string; err: string }>((resolve) => {
     const child = spawn("sh", [`examples/${file}.sh`], {
       cwd: new URL("..", import.meta.url),
-      env: { ...process.env, AGENT_HUB_URL: url, AGENT_HUB_KEY: key, AGENT_HUB_ONCE: "1", ...extra },
+      env: { ...process.env, AGENT_AUTOLOOP_URL: url, AGENT_AUTOLOOP_KEY: key, AGENT_AUTOLOOP_ONCE: "1", ...extra },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let out = "";
@@ -42,8 +42,8 @@ test("curl and jq examples run against a conforming hub and complete the answer 
   hub.ingest("app", { id: "shell", type: "feedback.new", subject: "shell" });
   const receipt = { outcome: "done", summary: "问了", ask: [{ title: "选一个", text: "测试", options: ["甲", "乙"] }] };
   const worker = await shell("worker", keys.worker, {
-    AGENT_HUB_RECEIPT: JSON.stringify(receipt),
-    AGENT_HUB_CLAIM: "shell-1",
+    AGENT_AUTOLOOP_RECEIPT: JSON.stringify(receipt),
+    AGENT_AUTOLOOP_CLAIM: "shell-1",
   });
   assert.equal(worker.code, 0, worker.err);
   const channel = await shell("channel", keys.channel);
@@ -56,7 +56,7 @@ test("curl and jq examples run against a conforming hub and complete the answer 
     body: JSON.stringify({ choice: 0, by: "me", ref: `curl-${card.id}` }),
   });
   assert.equal(answer.status, 200);
-  assert.equal((await shell("worker", keys.worker, { AGENT_HUB_CLAIM: "shell-2" })).code, 0);
+  assert.equal((await shell("worker", keys.worker, { AGENT_AUTOLOOP_CLAIM: "shell-2" })).code, 0);
   assert.notEqual((await shell("worker", keys.channel)).code, 0);
   assert.notEqual((await shell("channel", keys.worker)).code, 0);
 });

@@ -20,8 +20,8 @@ import { setup } from "./helpers.ts";
 const home = setup("worker");
 const folder = join(home, "project");
 mkdirSync(folder);
-process.env.AGENT_HUB_SECRET_X = "must-not-leak";
-process.env.AGENT_HUB_PUBLIC_URL = "https://hub.test";
+process.env.AGENT_AUTOLOOP_SECRET_X = "must-not-leak";
+process.env.AGENT_AUTOLOOP_PUBLIC_URL = "https://hub.test";
 const { createWorker } = await import("../worker/worker.ts");
 const { HubError } = await import("../protocol/client.ts");
 
@@ -131,7 +131,7 @@ const worker = (hub: ReturnType<typeof fakeHub>, more: object = {}) =>
 
 test("a job runs in its rule's folder with the prompt and context file, and without the hub's secrets", async () => {
   const hub = fakeHub();
-  const script = `pwd > out.txt; printenv AGENT_HUB_CONTEXT >> out.txt; printenv AGENT_HUB_SECRET_X >> out.txt; printenv AGENT_HUB_RUN >> out.txt; echo "$PROMPT_ARG" >> out.txt; cat "$AGENT_HUB_CONTEXT" > ctx.txt; echo 改好了`;
+  const script = `pwd > out.txt; printenv AGENT_AUTOLOOP_CONTEXT >> out.txt; printenv AGENT_AUTOLOOP_SECRET_X >> out.txt; printenv AGENT_AUTOLOOP_RUN >> out.txt; echo "$PROMPT_ARG" >> out.txt; cat "$AGENT_AUTOLOOP_CONTEXT" > ctx.txt; echo 改好了`;
   const given = job({ command: ["/bin/sh", "-c", `PROMPT_ARG="$1"; ${script}`, "sh", "{prompt}"] });
   hub.jobs.push(given);
   const w = worker(hub);
@@ -353,10 +353,10 @@ function said(name: string, text: string) {
 
 test("a receipt that can't be read is asked for again in the same session, doing nothing again", async () => {
   const hub = fakeHub();
-  const wrong = said("wrong", `session=s-1\n做完了\n\n${FENCE}agent-hub\n{ 不是 json\n${FENCE}\n`);
+  const wrong = said("wrong", `session=s-1\n做完了\n\n${FENCE}agent-autoloop\n{ 不是 json\n${FENCE}\n`);
   const right = said(
     "right",
-    `session=s-1\n做完了\n\n${FENCE}agent-hub\n{"notice":[{"title":"看一眼","text":"这个"}]}\n${FENCE}\n`,
+    `session=s-1\n做完了\n\n${FENCE}agent-autoloop\n{"notice":[{"title":"看一眼","text":"这个"}]}\n${FENCE}\n`,
   );
   // Turn 1 does the work and gets the receipt wrong; turn 2 only rewrites it.
   const script = `if [ -n "$1" ]; then cat "${right}"; echo "$2" > "${folder}/asked-again.txt"; exit 0; fi; echo did-it >> "${folder}/work.txt"; cat "${wrong}"`;
@@ -372,7 +372,7 @@ test("a receipt that can't be read is asked for again in the same session, doing
 
 test("a receipt that stays unreadable is given up on: the run ends on its first line, and the owner hears", async () => {
   const hub = fakeHub();
-  const wrong = said("always-wrong", `session=s-2\n做完了\n${FENCE}agent-hub\n{ 一直不对\n${FENCE}\n`);
+  const wrong = said("always-wrong", `session=s-2\n做完了\n${FENCE}agent-autoloop\n{ 一直不对\n${FENCE}\n`);
   hub.jobs.push(job({ use: "scripted", command: [`echo x >> "${folder}/tries.txt"; cat "${wrong}"`] }));
   const w = worker(hub);
   await until(w, () => hub.results.length === 1);
@@ -386,7 +386,9 @@ test("a receipt that stays unreadable is given up on: the run ends on its first 
   assert.match(hub.results[0].notice[0].title, /回执读不懂/);
   // An agent with no session can't be asked: straight to giving up.
   const plain = fakeHub();
-  plain.jobs.push(job({ command: ["/bin/cat", said("plain-wrong", `好了\n${FENCE}agent-hub\n{ bad\n${FENCE}\n`)] }));
+  plain.jobs.push(
+    job({ command: ["/bin/cat", said("plain-wrong", `好了\n${FENCE}agent-autoloop\n{ bad\n${FENCE}\n`)] }),
+  );
   const p = worker(plain);
   await until(p, () => plain.results.length === 1);
   assert.match(plain.results[0].notice[0].title, /回执读不懂/);

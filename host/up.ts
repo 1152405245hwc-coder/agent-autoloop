@@ -61,7 +61,7 @@ export async function up() {
   if (config.hub) {
     loadSecrets();
     const [host, port] = config.hub.listen.split(":");
-    process.env.AGENT_HUB_PUBLIC_URL = config.hub.publicUrl ?? `http://${config.hub.listen}`;
+    process.env.AGENT_AUTOLOOP_PUBLIC_URL = config.hub.publicUrl ?? `http://${config.hub.listen}`;
     const { serve } = await import("./http.ts");
     const say = log("hub");
     const server = serve(Number(port), host, { commit: commitOf() });

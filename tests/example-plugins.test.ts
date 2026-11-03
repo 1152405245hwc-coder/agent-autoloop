@@ -1,5 +1,5 @@
 // Failure modes: an example imports something that only exists in this repository, so it loads here and breaks once
-// `agent-hub add` has put it elsewhere; add leaves the entry where the loader doesn't look; hello-agent's read throws on
+// `agent-autoloop add` has put it elsewhere; add leaves the entry where the loader doesn't look; hello-agent's read throws on
 // output it doesn't expect (a throw stops the worker) or loses the session; hello-channel writes a card but never reports
 // it, so the hub sends it again every minute; hello-source takes a wrong or missing signature, or gives an event the hub
 // refuses; an example drifts from the engine's types; a command in the tutorial doesn't run as written.
@@ -24,21 +24,21 @@ const channel: (context: ChannelContext) => Promise<void> = helloChannel;
 assert.ok(adapter && channel);
 
 const ROOT = join(import.meta.dirname, "..");
-const CLI = join(ROOT, "bin", "agent-hub.ts");
-const scratch = mkdtempSync(join(tmpdir(), "agent-hub-example-plugins-"));
+const CLI = join(ROOT, "bin", "agent-autoloop.ts");
+const scratch = mkdtempSync(join(tmpdir(), "agent-autoloop-example-plugins-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 const cleanEnv = () =>
   Object.fromEntries(
-    Object.entries(process.env).filter(([name]) => !name.startsWith("AGENT_HUB_") && name !== "NODE_TEST_CONTEXT"),
+    Object.entries(process.env).filter(([name]) => !name.startsWith("AGENT_AUTOLOOP_") && name !== "NODE_TEST_CONTEXT"),
   ) as NodeJS.ProcessEnv;
-const agentHub = (args: string[], home: string) =>
+const agentAutoloop = (args: string[], home: string) =>
   spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", CLI, ...args], {
-    env: { ...cleanEnv(), AGENT_HUB_HOME: home },
+    env: { ...cleanEnv(), AGENT_AUTOLOOP_HOME: home },
     encoding: "utf8",
   });
 const newKey = (home: string, kind: string, name: string) =>
-  agentHub(["key", "new", kind, name], home).stdout.trim().split("\n").at(-1)!;
+  agentAutoloop(["key", "new", kind, name], home).stdout.trim().split("\n").at(-1)!;
 
 async function freePort() {
   const server = createServer();
@@ -175,7 +175,7 @@ function repository(name: string, file: string) {
   return dir;
 }
 
-test("agent-hub add from a git repository, then all three run through a real hub", async () => {
+test("agent-autoloop add from a git repository, then all three run through a real hub", async () => {
   const home = mkdtempSync(join(scratch, "home-"));
   const plugins = [
     ["hello-agent", "agent.ts"],
@@ -183,7 +183,7 @@ test("agent-hub add from a git repository, then all three run through a real hub
     ["hello-source", "source.ts"],
   ];
   for (const [name, file] of plugins) {
-    const added = agentHub(["add", repository(name, file)], home);
+    const added = agentAutoloop(["add", repository(name, file)], home);
     assert.equal(added.status, 0, added.stderr);
     assert.ok(existsSync(join(home, "plugins", name, file)), `${name} 没装到加载器找的地方`);
   }
@@ -219,9 +219,9 @@ test("agent-hub add from a git repository, then all three run through a real hub
     }),
   );
   const owner = { authorization: `Bearer ${newKey(home, "owner", "me")}` };
-  writeFileSync(join(home, "secrets.env"), "AGENT_HUB_SECRET_SHOP=s3cret\n");
+  writeFileSync(join(home, "secrets.env"), "AGENT_AUTOLOOP_SECRET_SHOP=s3cret\n");
   const up = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", CLI, "up"], {
-    env: { ...cleanEnv(), AGENT_HUB_HOME: home, SHELL: "/bin/sh" },
+    env: { ...cleanEnv(), AGENT_AUTOLOOP_HOME: home, SHELL: "/bin/sh" },
     stdio: "ignore",
   });
   const stream = new AbortController();
@@ -268,11 +268,11 @@ async function runBlock(heading: string, oldPort: number) {
   const dir = mkdtempSync(join(scratch, "block-"));
   const bin = join(dir, "bin");
   mkdirSync(bin);
-  const shim = join(bin, "agent-hub");
+  const shim = join(bin, "agent-autoloop");
   writeFileSync(shim, `#!/bin/sh\nexec "${process.execPath}" --disable-warning=ExperimentalWarning "${CLI}" "$@"\n`);
   chmodSync(shim, 0o755);
   const port = await freePort();
-  const script = block.replaceAll("~/.agent-hub/app", ROOT).replaceAll(String(oldPort), String(port));
+  const script = block.replaceAll("~/.agent-autoloop/app", ROOT).replaceAll(String(oldPort), String(port));
   const child = spawn("sh", ["-c", script], {
     cwd: ROOT,
     detached: true,
@@ -292,7 +292,7 @@ async function runBlock(heading: string, oldPort: number) {
 test("the tutorial's first block runs all three examples as written", async () => {
   const { code, out } = await runBlock("先跑起来", 3399);
   assert.equal(code, 0, out);
-  assert.match(out, /agent-hub add from a git repository/);
+  assert.match(out, /agent-autoloop add from a git repository/);
 });
 
 test("the tutorial's conformance block passes as written", async () => {

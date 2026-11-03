@@ -1,4 +1,4 @@
-# Agent 自动化中台
+# Agent Autoloop · Agent 自动化中台
 
 让 Agent 自己跟进每一件事，只在需要你判断的时候问你一句。
 
@@ -22,13 +22,13 @@
 一条命令装好程序、配置和桌面通知：
 
 ```bash
-gh api repos/KKKKhazix/agent-hub/contents/install.sh -H 'Accept: application/vnd.github.raw+json' | sh
+gh api repos/KKKKhazix/agent-autoloop/contents/install.sh -H 'Accept: application/vnd.github.raw+json' | sh
 ```
 
 用自己的 Agent 走一遍提问、回答和继续处理：
 
 ```bash
-agent-hub try
+agent-autoloop try
 ```
 
 下面是 Codex 在非交互终端里的真实输出：
@@ -42,11 +42,11 @@ Agent 结束了这一轮，问了你一个问题。它现在不占进程、不�
 这是一次试跑，选哪个都行。
   1. 蓝色
   2. 绿色
-回答：agent-hub answer 1 <序号>
-答完运行 agent-hub status，能看到它接着把活干完。
+回答：agent-autoloop answer 1 <序号>
+答完运行 agent-autoloop status，能看到它接着把活干完。
 ```
 
-运行 `agent-hub answer 1 2` 选择绿色，`agent-hub status` 会显示“你选了绿色，试跑通过”。在交互终端里，直接输入序号就行。
+运行 `agent-autoloop answer 1 2` 选择绿色，`agent-autoloop status` 会显示“你选了绿色，试跑通过”。在交互终端里，直接输入序号就行。
 
 ## 规则
 
@@ -69,16 +69,16 @@ Agent 结束了这一轮，问了你一个问题。它现在不占进程、不�
 { "name": "早报", "when": { "cron": "0 9 * * *" }, "to": "codex", "cwd": "~/notes", "prompt": "写今天的早报。" }
 ```
 
-改 `~/.agent-hub/rules.json` 后几秒内生效，运行 `agent-hub check` 检查。写错时保留原规则，并告诉你哪里不对。
+改 `~/.agent-autoloop/rules.json` 后几秒内生效，运行 `agent-autoloop check` 检查。写错时保留原规则，并告诉你哪里不对。
 
 ## Agent 只需要做一件事
 
-打印最后一条消息。第一行写结论，需要中台继续处理的事放进 `agent-hub` 代码块：
+打印最后一条消息。第一行写结论，需要中台继续处理的事放进 `agent-autoloop` 代码块：
 
 ````text
 订单已经核对，库存充足。
 
-```agent-hub
+```agent-autoloop
 { "ask": [{ "title": "怎么发货？", "text": "两种方式都能送达。", "options": ["快递", "自提"], "key": "shipping" }] }
 ```
 ````
@@ -87,7 +87,7 @@ Agent 结束了这一轮，问了你一个问题。它现在不占进程、不�
 
 ## 为什么这样设计
 
-**一条日志。** 被中台接受的变化都记成只追加的事实，当前状态全部从日志算出来。所以任何一轮都能追出前因后果，运行 `agent-hub why 1`：
+**一条日志。** 被中台接受的变化都记成只追加的事实，当前状态全部从日志算出来。所以任何一轮都能追出前因后果，运行 `agent-autoloop why 1`：
 
 ```text
 第 1 轮 · 演示
@@ -97,9 +97,9 @@ Agent 结束了这一轮，问了你一个问题。它现在不占进程、不�
 11-03 20:47:25  结束：演示完成
 ```
 
-下面的复现命令在程序目录 `~/.agent-hub/app` 运行。
+下面的复现命令在程序目录 `~/.agent-autoloop/app` 运行。
 
-**一个确定性内核。** 内核不发请求、不读时钟、不用随机数。同样的输入永远得到同样的结果，所以能在内存里模拟断网、崩溃和重复请求，出错时一个种子就能复现：
+**一个确定性内核。** Autoloop 内核不发请求、不读时钟、不用随机数。同样的输入永远得到同样的结果，所以能在内存里模拟断网、崩溃和重复请求，出错时一个种子就能复现：
 
 ```bash
 node sim/random.ts 24301 200000
@@ -151,9 +151,9 @@ Apple M5 Pro、24 GB、Node 24.21.0。运行 `npm run benchmark` 复现 HTTP 服
 
 普通命令用 `use: "command"`，把命令拆成 `command` 数组；`{prompt}` 是单个参数，不作为 shell 代码执行。需要会话恢复、用量统计或自己的权限映射时，写一个[Agent 插件](docs/plugins.md#agent-插件)。
 
-**通道把问题送到你面前。** 默认桌面通知；飞书用卡片按钮，钉钉、企微、Slack、Discord 用文字和回答链接。也可以只用 `agent-hub status` 和 `agent-hub answer`。
+**通道把问题送到你面前。** 默认桌面通知；飞书用卡片按钮，钉钉、企微、Slack、Discord 用文字和回答链接。也可以只用 `agent-autoloop status` 和 `agent-autoloop answer`。
 
-飞书已经真实跑通发送、点击和更新卡片；群机器人模板只用假服务测过。支持 stdio MCP 2025-11-25 的客户端可用 `agent-hub mcp` 查看、追溯、回答和处理事项。
+飞书已经真实跑通发送、点击和更新卡片；群机器人模板只用假服务测过。支持 stdio MCP 2025-11-25 的客户端可用 `agent-autoloop mcp` 查看、追溯、回答和处理事项。
 
 ## 拿来就用
 
@@ -165,7 +165,7 @@ Apple M5 Pro、24 GB、Node 24.21.0。运行 `npm run benchmark` 复现 HTTP 服
 
 给 PR 打 `deliver` 标签，交付插件会审查、等检查、合并、等 Ship，再核对健康接口里的版本。配置只读 main，PR 的代码、测试和配置不在接单电脑上执行。
 
-队列、并发和重试沿用中台。[配置交付流水线](skills/agent-hub/SKILL.md#交付流水线)。
+队列、并发和重试沿用中台。[配置交付流水线](skills/agent-autoloop/SKILL.md#交付流水线)。
 
 ## 没有界面
 
@@ -193,7 +193,7 @@ Apple M5 Pro、24 GB、Node 24.21.0。运行 `npm run benchmark` 复现 HTTP 服
 ## 文档
 
 - [安装说明](INSTALL.md)
-- [配置手册](skills/agent-hub/SKILL.md)
+- [配置手册](skills/agent-autoloop/SKILL.md)
 - [写插件](docs/plugins.md)
 - [完整协议](docs/protocol.md)
 - [安全边界](SECURITY.md)

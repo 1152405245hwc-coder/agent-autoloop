@@ -5,9 +5,9 @@
 
 ## 怎么启用
 把本目录的 `SKILL.md` 复制到 `~/.codex/skills/handle-issue/`；Claude Code 用 `~/.claude/skills/handle-issue/`。
-把 `rules.json` 的 `sources`、`agents`、`rules` 并进 `~/.agent-hub/rules.json`，然后检查：
+把 `rules.json` 的 `sources`、`agents`、`rules` 并进 `~/.agent-autoloop/rules.json`，然后检查：
 ```bash
-agent-hub check
+agent-autoloop check
 ```
 接单电脑需要已登录的 `gh`；轮询脚本把正文一并交给 Agent。
 

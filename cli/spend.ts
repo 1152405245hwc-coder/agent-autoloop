@@ -1,4 +1,4 @@
-// The cost line in `agent-hub status`, worked out from the runs /v1/state lists. Agents report usage for themselves, or
+// The cost line in `agent-autoloop status`, worked out from the runs /v1/state lists. Agents report usage for themselves, or
 // don't: a plain command says nothing, and some give tokens but no price. So every figure says how many rounds it leaves out.
 import { dayStart } from "../kernel/cron.ts";
 

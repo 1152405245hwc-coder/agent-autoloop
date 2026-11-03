@@ -62,7 +62,7 @@
 }
 ```
 
-`elsewhere` 是在别处定时跑的任务：中台不启动它们，只在 `agent-hub status` 里列出来，它们要找你时用 `POST /v1/tell`。规则写错了，文件改动不生效，旧规则继续跑，并推一张卡片告诉你错在哪。
+`elsewhere` 是在别处定时跑的任务：中台不启动它们，只在 `agent-autoloop status` 里列出来，它们要找你时用 `POST /v1/tell`。规则写错了，文件改动不生效，旧规则继续跑，并推一张卡片告诉你错在哪。
 
 ## 来源：把世界变成事件
 
@@ -74,7 +74,7 @@ POST /v1/events                    Authorization: Bearer <来源的密钥>
 
 - `id` 和 `type` 必填。同一来源同一 `id` 只记一次，所以来源尽管重发。
 - `subject` 只能是标识符（字母、数字和 `# . _ : / @ -`），`link` 只能是纯 ASCII 网址，因为它们会进提示词。`summary`、`detail` 不进提示词。
-- 没有规则匹配的事件也留着，`agent-hub status` 看得到。
+- 没有规则匹配的事件也留着，`agent-autoloop status` 看得到。
 
 三种别的进法，到中台都是同一种事件：
 
@@ -145,7 +145,7 @@ POST /v1/runs/12/result    Authorization: Bearer <token>   Result
 
 - 结果可以重放：响应丢了，同一个 token 再交一次同样的内容，得到同样的确认；内容不同返回 409。
 - `failed` 会重派，所以它只带 `notice`，其余的不生效。
-- `usage` 由接单程序自己上报，每一项都可以没有：`input`、`output`、`cached` 是 Token 数，`cost` 是美元。`agent-hub status` 的成本一行由各轮的 `usage` 算出，没上报的轮数如实写出来。
+- `usage` 由接单程序自己上报，每一项都可以没有：`input`、`output`、`cached` 是 Token 数，`cost` 是美元。`agent-autoloop status` 的成本一行由各轮的 `usage` 算出，没上报的轮数如实写出来。
 - `ask` 的 `key` 范围是这个事项：同一个 `key` 的卡片还开着就不再发。关掉之后再问是新的一次。
 - `resolve` 只能结同来源、同组、这一轮领活前就有的卡片，越界的写进 `rejected`，不影响这一轮的结果。
 - `later` 的 `key` 范围是这个事项，同一个 `key` 再写一次就是改时间。
@@ -158,7 +158,7 @@ POST /v1/runs/12/result    Authorization: Bearer <token>   Result
 ````
 第一行一句话结论。没跑成写「没跑成：原因」，没事可做写「没事可做：原因」，其余都算做成了。
 
-```agent-hub
+```agent-autoloop
 { "ask": [ … ], "notice": [ … ], "resolve": [ … ], "later": [ … ], "events": [ … ] }
 ```
 ````
@@ -203,7 +203,7 @@ GET /v1/cards/next?wait=50    Authorization: Bearer <通道的密钥>
 
 - `ref` 是空的就发一条新的；不是空的就把那条改成现在的样子，改不了就直接报告。
 - 发完报告：`POST /v1/cards/56/delivered { "version": 2, "ref": "om_xxx" }`。没报告的过一分钟会再给你。**支持幂等键的平台，发新消息只用卡片编号，不带版本**。平台不支持时无法保证去重，Webhook 模板可能在报告丢失后重发。
-- 发不出去：`POST /v1/cards/56/failed { "version": 2, "error": "…" }`。第一次发送隔得越来越久地重试，一小时后放弃（卡片还开着，`agent-hub status` 看得到）；通道一直没来领不算在内。
+- 发不出去：`POST /v1/cards/56/failed { "version": 2, "error": "…" }`。第一次发送隔得越来越久地重试，一小时后放弃（卡片还开着，`agent-autoloop status` 看得到）；通道一直没来领不算在内。
 - 还没送达就已经解决的卡片不再打扰你。
 - 你点了：`POST /v1/cards/56/answer { "choice": 1, "by": "ou_xxx", "ref": "om_xxx" }`。只有第一次算数，`by` 要在这个通道的 `answerers` 里，`ref` 要和送达的那条一致。不带选项的通知有一个“已处理”按钮，点了就结案。
 
@@ -220,9 +220,9 @@ POST /v1/cards/56/resolve   { "reason": "不用决定了，因为……" }
 POST /v1/runs/12/cancel     {}
 ```
 
-`agent-hub status`、`answer`、`resolve`、`stop` 就是这几个请求。`/v1/state` 一次给最近 60 轮，`?before=<nextBefore>` 翻更早的。
+`agent-autoloop status`、`answer`、`resolve`、`stop` 就是这几个请求。`/v1/state` 一次给最近 60 轮，`?before=<nextBefore>` 翻更早的。
 
-安装与卸载不改变 HTTP 协议。`agent-hub --version` 显示包版本与提交；`agent-hub uninstall` 确认后移除自身程序、链接和服务，始终保留规则、密钥和记录；`--yes` 只跳过确认。
+安装与卸载不改变 HTTP 协议。`agent-autoloop --version` 显示包版本与提交；`agent-autoloop uninstall` 确认后移除自身程序、链接和服务，始终保留规则、密钥和记录；`--yes` 只跳过确认。
 
 ## 失败时会怎样
 
@@ -268,17 +268,17 @@ Node 请求转换层保持在 50 行内；文件、SQLite、监听和定时器�
 
 `GET /v1/stream?after=42` 仅接受本人的密钥，返回 SSE：`id` 是日志序号，`event: fact`，`data` 是事实 JSON。断线用 `Last-Event-ID` 或 `after` 从下一条继续；从 0 读全量。不给订阅者发送密钥哈希或能力凭据。
 
-`GET /v1/runs/42/why` 仅接受本人的密钥，返回与本轮事件、每次执行的规则版本、领取、回执、卡片回答有关的事实。命令行 `agent-hub why 42` 使用同一接口，时间按本机时区显示为 `MM-DD HH:mm:ss`，默认显示事件、规则版本、领取者、起止时间、会话、回执、回答和接续轮次的时间线，不打印规则正文；`agent-hub why 42 --json` 输出原始事实。这些接口沿用本人的访问权限。内部回答和定时事件遇到已存在的编号时按序加后缀，保持来源与编号唯一，不覆盖来源的事件。
+`GET /v1/runs/42/why` 仅接受本人的密钥，返回与本轮事件、每次执行的规则版本、领取、回执、卡片回答有关的事实。命令行 `agent-autoloop why 42` 使用同一接口，时间按本机时区显示为 `MM-DD HH:mm:ss`，默认显示事件、规则版本、领取者、起止时间、会话、回执、回答和接续轮次的时间线，不打印规则正文；`agent-autoloop why 42 --json` 输出原始事实。这些接口沿用本人的访问权限。内部回答和定时事件遇到已存在的编号时按序加后缀，保持来源与编号唯一，不覆盖来源的事件。
 
 ## 一致性和复现
 
-插件入口统一为 `plugins/<名字>/agent.ts`、`channel.ts` 或 `source.ts`，先找安装目录，再找引擎内置目录。`agent-hub add <git 地址>` 将插件仓库克隆到安装目录的 `plugins/<仓库名>`，仓库根目录直接放入口文件，不自动更新，不执行安装脚本。插件是本人安装的可信代码，事件不能指定插件路径。
+插件入口统一为 `plugins/<名字>/agent.ts`、`channel.ts` 或 `source.ts`，先找安装目录，再找引擎内置目录。`agent-autoloop add <git 地址>` 将插件仓库克隆到安装目录的 `plugins/<仓库名>`，仓库根目录直接放入口文件，不自动更新，不执行安装脚本。插件是本人安装的可信代码，事件不能指定插件路径。
 
 事件接受可选的 `hops`，非负安全整数，缺省为 0。回执事件强制使用本轮所有事件最大 hops 加 1；提问的回答和 later 定时延续原深度。超过 8 的事件仍记录但不派发，并产生通知；重复提交不重复通知。这是中台内处理链的限制，外部来源直接发出的新事件可以从 0 开始。旧日志没有 hops 时按 0 读取。
 
-`DELETE /v1/keys/<source|worker|channel|owner>/<名字>` 只接受本人密钥，返回 `{ok:true}`。`agent-hub key remove <种类> <名字>` 调用正在运行的中台，删除立即唤醒并拒绝该密钥的长轮询，关闭日志订阅。已领取的一轮继续用独立的轮次 token 交结果。
+`DELETE /v1/keys/<source|worker|channel|owner>/<名字>` 只接受本人密钥，返回 `{ok:true}`。`agent-autoloop key remove <种类> <名字>` 调用正在运行的中台，删除立即唤醒并拒绝该密钥的长轮询，关闭日志订阅。已领取的一轮继续用独立的轮次 token 交结果。
 
-`protocol/schema.json` 使用 JSON Schema 2020-12，定义事件、回执、任务、卡片和日志的格式。`agent-hub conformance <测试地址> --config <文件>` 走真实 HTTP；文件包含 `keys`（source、worker、channel、owner 四把测试密钥）、能匹配测试规则的 `eventType` 和通道允许的 `answerer`。规则要能把该来源和类型交给该接单程序，`parallel` 至少为 2，通道要限制回答人。检查会写入事件和卡片，只在专用测试中台运行；同一个测试中台可以连续检查。各来源的签名格式由对应插件的测试检查。
+`protocol/schema.json` 使用 JSON Schema 2020-12，定义事件、回执、任务、卡片和日志的格式。`agent-autoloop conformance <测试地址> --config <文件>` 走真实 HTTP；文件包含 `keys`（source、worker、channel、owner 四把测试密钥）、能匹配测试规则的 `eventType` 和通道允许的 `answerer`。规则要能把该来源和类型交给该接单程序，`parallel` 至少为 2，通道要限制回答人。检查会写入事件和卡片，只在专用测试中台运行；同一个测试中台可以连续检查。各来源的签名格式由对应插件的测试检查。
 
 文字上限按 Unicode 码点计算。`usage` 必须是数值非负且有限的对象，不能是数组；`later.at` 必须是真实日期的 ISO 日期时间，带 `Z` 或时区偏移。回执先核验整体，再执行。
 
@@ -294,15 +294,15 @@ Node 请求转换层保持在 50 行内；文件、SQLite、监听和定时器�
 
 权限只选一次性的选项：`read` 允许结构化的读和搜索，`edit` 再允许工作目录内的编辑（核对符号链接），`full` 允许其他操作。未提供相应选项就取消。权限依赖 Agent 遵守 ACP，不提供额外的系统隔离。核对依据：[初始化](https://agentclientprotocol.com/protocol/v1/initialization)、[会话](https://agentclientprotocol.com/protocol/v1/session-setup)、[工具权限](https://agentclientprotocol.com/protocol/v1/tool-calls)。
 
-`agent-hub mcp` 提供 stdio MCP，固定支持 [2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle) 版，不支持 2026-07-28 的无握手协议。工具为 `status`、`why`、`answer`、`resolve`、`stop`、`emit`、`tell`；按本机已有的本人或来源密钥展示工具。它调用同样的 HTTP 接口，不直接改数据库；密钥留在本机 `config.json`。MCP 客户端把程序设为 `node`，参数设为引擎的绝对路径 `bin/agent-hub.ts` 和 `mcp`，环境里指定 `AGENT_HUB_HOME`。标准输出只写 JSON-RPC。
+`agent-autoloop mcp` 提供 stdio MCP，固定支持 [2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle) 版，不支持 2026-07-28 的无握手协议。工具为 `status`、`why`、`answer`、`resolve`、`stop`、`emit`、`tell`；按本机已有的本人或来源密钥展示工具。它调用同样的 HTTP 接口，不直接改数据库；密钥留在本机 `config.json`。MCP 客户端把程序设为 `node`，参数设为引擎的绝对路径 `bin/agent-autoloop.ts` 和 `mcp`，环境里指定 `AGENT_AUTOLOOP_HOME`。标准输出只写 JSON-RPC。
 
 ### 通道模板与命令行示例
 
 Webhook 通道的 `config.json` 配置使用 `use: "webhook"`、`url` 和 `platform`，后者可选 `dingtalk`、`wecom`、`slack`、`discord`。不写 platform 时可用 `body` 自定义模板，字符串里的 `{text}` 替换为卡片内容。四个模板对照官方文档：[钉钉](https://open.dingtalk.com/document/orgapp/custom-bot-send-message-type)、[企微](https://developer.work.weixin.qq.com/document/path/91770)、[Slack](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/)、[Discord](https://discord.com/developers/docs/resources/webhook#execute-webhook)。钉钉和企微检查响应的 `errcode`，Slack 检查 `ok`；Discord 禁止文字触发提及。超过企微 2048 字节或 Discord 2000 字的卡片会报告失败，不截断问题或回答链接。Webhook 本身没有幂等保证，消息发送成功但报告丢失时可能重发。
 
-桌面通知 `desktop` 是新安装默认打开的通道：macOS 用 `osascript`，Linux 用 `notify-send`。通知标题是“Agent 问你一个问题”，正文是卡片标题和“运行 agent-hub status 查看”；文字通过 `--` 后的参数传入，不拼进脚本。没有图形会话时不调用通知程序，报告 `skipped-<卡片编号>`，不反复打扰；卡片仍可通过命令行查看和回答。有图形会话但通知命令不存在或失败时报告 `failed`，由中台安排重试。卡片更新只报告，不重复弹出。
+桌面通知 `desktop` 是新安装默认打开的通道：macOS 用 `osascript`，Linux 用 `notify-send`。通知标题是“Agent 问你一个问题”，正文是卡片标题和“运行 agent-autoloop status 查看”；文字通过 `--` 后的参数传入，不拼进脚本。没有图形会话时不调用通知程序，报告 `skipped-<卡片编号>`，不反复打扰；卡片仍可通过命令行查看和回答。有图形会话但通知命令不存在或失败时报告 `failed`，由中台安排重试。卡片更新只报告，不重复弹出。
 
-`examples/worker.sh` 和 `examples/channel.sh` 只用 shell 内置命令、curl、jq。设置 `AGENT_HUB_URL`、`AGENT_HUB_KEY` 后运行；`AGENT_HUB_ONCE=1` 只领一次。接单示例交回 `AGENT_HUB_RECEIPT` 中的 JSON，默认交回完成；通道示例把卡片输出到终端，再报告送达。它们是短任务示例，不适合长任务；长任务使用 `worker/` 的心跳、停止和恢复。`tests/examples.test.ts` 在通过协议一致性检查的临时中台上实际运行两个脚本，覆盖提问、送达、回答、继续和错误密钥。
+`examples/worker.sh` 和 `examples/channel.sh` 只用 shell 内置命令、curl、jq。设置 `AGENT_AUTOLOOP_URL`、`AGENT_AUTOLOOP_KEY` 后运行；`AGENT_AUTOLOOP_ONCE=1` 只领一次。接单示例交回 `AGENT_AUTOLOOP_RECEIPT` 中的 JSON，默认交回完成；通道示例把卡片输出到终端，再报告送达。它们是短任务示例，不适合长任务；长任务使用 `worker/` 的心跳、停止和恢复。`tests/examples.test.ts` 在通过协议一致性检查的临时中台上实际运行两个脚本，覆盖提问、送达、回答、继续和错误密钥。
 
 ## 结构与预算
 
@@ -332,7 +332,7 @@ Webhook 通道的 `config.json` 配置使用 `use: "webhook"`、`url` 和 `platf
 
 ## 交付插件
 
-交付是 `plugins/delivery` 的普通 Agent 进程，内核不认识它。项目仍用 `ops/delivery.json`，标签仍是 `deliver`、`deliver-attended`、`deliver-review`、`ask-owner`，提交状态仍为 `delivery`。审查状态默认 `agent-review`，由 `review.status` 修改；命令由 `review.command` 修改。设置格式、规则与 Ship 示例见[配置手册](../skills/agent-hub/SKILL.md#交付流水线)。
+交付是 `plugins/delivery` 的普通 Agent 进程，内核不认识它。项目仍用 `ops/delivery.json`，标签仍是 `deliver`、`deliver-attended`、`deliver-review`、`ask-owner`，提交状态仍为 `delivery`。审查状态默认 `agent-review`，由 `review.status` 修改；命令由 `review.command` 修改。设置格式、规则与 Ship 示例见[配置手册](../skills/agent-autoloop/SKILL.md#交付流水线)。
 
 来源只给事件，仓库与执行命令由中台规则固定。内置 `poll.ts` 读取待处理标签，以“仓库、事项、标签记录、当前提交”生成稳定事件编号，不另存游标。无标签、关闭且未合并、fork 或非 main 目标不启动交付。每个 PR 一个事项，并发由规则 `parallel` 和接单程序容量控制；进程失败使用中台的 5 分钟起重试和连续失败通知，不另建队列、槽位、失败计数或通知服务。
 

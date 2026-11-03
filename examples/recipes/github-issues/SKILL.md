@@ -13,6 +13,6 @@ issue 的编号、标题和正文在资料文件的 events 里（subject、summa
 4. 不提交，不推送，不回复 issue，这些留给人。
 5. 发一张 notice：
 
-   ```agent-hub
+   ```agent-autoloop
    {"notice":[{"title":"issue #12 改好了，等你看","text":"改了什么，一两句。在工作目录运行 git diff 查看。测试：跑过且通过，或者没跑、为什么。","key":"issue-12"}]}
    ```

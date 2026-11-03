@@ -155,7 +155,7 @@ test("the lookups the hub uses", () => {
 
 test("a good file changing on disk takes effect; a bad one leaves the old rules and says why", () => {
   const file = join(home, "rules.json");
-  process.env.AGENT_HUB_RULES = file;
+  process.env.AGENT_AUTOLOOP_RULES = file;
   const changed = good();
   changed.rules[0].prompt = "新的说法。";
   writeFileSync(file, JSON.stringify(changed));

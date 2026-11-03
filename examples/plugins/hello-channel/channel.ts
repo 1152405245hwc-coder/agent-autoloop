@@ -1,4 +1,4 @@
-// The smallest channel: every card becomes a few lines in a file. Someone answers with `agent-hub answer`, because a file
+// The smallest channel: every card becomes a few lines in a file. Someone answers with `agent-autoloop answer`, because a file
 // has no buttons.
 //   rules.json:  "channels": { "cards": { "name": "文件" } }
 //   config.json: "channels": { "cards": { "use": "hello-channel", "key": "…", "file": "/绝对路径/cards.txt" } }

@@ -24,13 +24,13 @@ if (!existsSync(masterKeyFile)) {
 }
 export const environment = {
   secret: readFileSync(masterKeyFile, "utf8").trim(),
-  publicUrl: process.env.AGENT_HUB_PUBLIC_URL ?? "",
+  publicUrl: process.env.AGENT_AUTOLOOP_PUBLIC_URL ?? "",
 };
 
 export const db = new DatabaseSync(join(HOME, "hub.db"));
 db.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;");
 if (db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='events'").get()) {
-  throw new Error("这是旧版数据库；本轮未提供导入工具，请使用新的 AGENT_HUB_HOME");
+  throw new Error("这是旧版数据库；本轮未提供导入工具，请使用新的 AGENT_AUTOLOOP_HOME");
 }
 db.exec(`
   CREATE TABLE IF NOT EXISTS facts(seq INTEGER PRIMARY KEY, fact TEXT NOT NULL);
@@ -170,7 +170,7 @@ export function cardAtLink(token: string) {
 export function answerByLink(token: string, given: Answer, now = Date.now()) {
   const card = cardAtLink(token);
   if (now - Date.parse(card.created_at) > 7 * 86400_000) {
-    throw new AuthError(`这个链接过期了。在装它的电脑上运行 agent-hub answer ${card.id} 回答`);
+    throw new AuthError(`这个链接过期了。在装它的电脑上运行 agent-autoloop answer ${card.id} 回答`);
   }
   return answer(card.id, { ...given, by: "链接" }, now);
 }

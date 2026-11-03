@@ -11,54 +11,54 @@
 从 GitHub 安装需要已登录且能访问本仓库的 GitHub CLI；私有仓库不能用匿名下载。下面的命令安装并启用登录后常驻服务：
 
 ```bash
-gh api repos/KKKKhazix/agent-hub/contents/install.sh -H 'Accept: application/vnd.github.raw+json' | sh
+gh api repos/KKKKhazix/agent-autoloop/contents/install.sh -H 'Accept: application/vnd.github.raw+json' | sh
 ```
 
-用户指定本地仓库时，用该目录的安装脚本，并把 `AGENT_HUB_REPO` 设成它的绝对路径。不要下载 GitHub 的旧脚本，也不要用未提交的文件冒充已安装版本；安装器克隆的是本地仓库的 HEAD。
+用户指定本地仓库时，用该目录的安装脚本，并把 `AGENT_AUTOLOOP_REPO` 设成它的绝对路径。不要下载 GitHub 的旧脚本，也不要用未提交的文件冒充已安装版本；安装器克隆的是本地仓库的 HEAD。
 
-下面以 `/path/to/agent-hub` 为例，使用已经登录的 Codex：
+下面以 `/path/to/agent-autoloop` 为例，使用已经登录的 Codex：
 
 ```bash
-AGENT_HUB_REPO=/path/to/agent-hub sh /path/to/agent-hub/install.sh --agent codex
+AGENT_AUTOLOOP_REPO=/path/to/agent-autoloop sh /path/to/agent-autoloop/install.sh --agent codex
 ```
 
 `--agent claude` 选择 Claude Code；只有其他 CLI 时加 `--command 'hermes chat -q {prompt}'`。不指定时会检测本机安装的 Agent，第一种作为试跑对象。
 
-程序装进 `~/.agent-hub/app`，配置和记录留在 `~/.agent-hub`。默认打开桌面通知；没有图形会话时安静跳过，问题仍能用 `agent-hub status` 查看。命令优先放在 PATH 中的 `~/.local/bin`，否则选 PATH 里第一个可写目录，不用 sudo、不覆盖其他程序；没有位置时使用安装器打印的完整路径。
+程序装进 `~/.agent-autoloop/app`，配置和记录留在 `~/.agent-autoloop`。默认打开桌面通知；没有图形会话时安静跳过，问题仍能用 `agent-autoloop status` 查看。命令优先放在 PATH 中的 `~/.local/bin`，否则选 PATH 里第一个可写目录，不用 sudo、不覆盖其他程序；没有位置时使用安装器打印的完整路径。
 
 ## 临时 HOME、CI 或没有服务管理器
 
-使用临时 HOME 时不要装系统服务，不改真实用户的 shell 配置和 Agent 配置。保留调用者给定的 `AGENT_HUB_HOME`；用真实 `CODEX_HOME` 只为了沿用已经完成的 Codex 登录。
+使用临时 HOME 时不要装系统服务，不改真实用户的 shell 配置和 Agent 配置。保留调用者给定的 `AGENT_AUTOLOOP_HOME`；用真实 `CODEX_HOME` 只为了沿用已经完成的 Codex 登录。
 
 在临时环境中选一个空闲端口，运行本地安装脚本，随后启动中台：
 
 ```bash
 port=$(node -e 'const s=require("node:net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')
-AGENT_HUB_REPO=/path/to/agent-hub sh /path/to/agent-hub/install.sh --agent codex --no-service --port "$port"
-agent-hub up
+AGENT_AUTOLOOP_REPO=/path/to/agent-autoloop sh /path/to/agent-autoloop/install.sh --agent codex --no-service --port "$port"
+agent-autoloop up
 ```
 
 `up` 会一直运行。在 Agent 的命令工具里保留它返回的运行中会话，再用另一条命令完成验证；不要用 `nohup … &` 代替，命令工具可能在退出时清理后台进程。看到监听地址后再运行验证命令；启动失败就先处理该会话里的错误。
 
-PATH 没有命令时，把 `agent-hub` 换成安装器打印的完整路径。临时测试使用假的 `osascript`、`notify-send`，不要发送真实消息；不要给已在线的飞书应用再开监听。
+PATH 没有命令时，把 `agent-autoloop` 换成安装器打印的完整路径。临时测试使用假的 `osascript`、`notify-send`，不要发送真实消息；不要给已在线的飞书应用再开监听。
 
 ## 验证
 
 先查看安装和连接情况，再用真实 Agent 跑完整问答：
 
 ```bash
-agent-hub --version
-agent-hub doctor
-agent-hub try
+agent-autoloop --version
+agent-autoloop doctor
+agent-autoloop try
 ```
 
-`try` 会使用用户的模型额度。在非交互终端，它打印问题和 `agent-hub answer` 命令后退出；这是正常等待，不是失败。把问题转给用户，按他的选择回答，再运行 `agent-hub status`，看到“试跑通过”才算接通。仅为安装验证时，可以选择第二项绿色完成试跑。
+`try` 会使用用户的模型额度。在非交互终端，它打印问题和 `agent-autoloop answer` 命令后退出；这是正常等待，不是失败。把问题转给用户，按他的选择回答，再运行 `agent-autoloop status`，看到“试跑通过”才算接通。仅为安装验证时，可以选择第二项绿色完成试跑。
 
 没有安装系统服务时，`doctor` 会显示服务未运行；检查中台、Agent 和桌面通道是否在线即可，不要为了消除这条提示安装真实服务。
 
 ## 写第一条规则
 
-安装验证完成后，问用户希望什么事自动处理，再照[配置手册](skills/agent-hub/SKILL.md)写规则。用 `agent-hub check` 检查；改动几秒内生效。
+安装验证完成后，问用户希望什么事自动处理，再照[配置手册](skills/agent-autoloop/SKILL.md)写规则。用 `agent-autoloop check` 检查；改动几秒内生效。
 
 桌面通知只在这台电脑上显示。需要别的通道时，先确认接收位置，再按配置手册接入。不要直接测试发信或发群消息。`access` 的含义见[插件说明](docs/plugins.md#access-实际能做什么)，不要替用户扩大权限。
 
@@ -67,16 +67,16 @@ agent-hub try
 卸载程序，默认保留规则、密钥和记录：
 
 ```bash
-agent-hub uninstall
+agent-autoloop uninstall
 ```
 
 终端里确认后才执行；非交互运行时加 `--yes` 跳过确认，数据同样保留。它只停自己的服务和进程、删除指向自身的命令及 Skill 链接，以及安装目录里的 `app`。其他同名文件不动；数据目录不删除。
 
-临时安装验证完，用 `agent-hub uninstall --yes` 停掉本次进程，再清掉自己创建的临时目录。不要卸载用户已经在用的中台。
+临时安装验证完，用 `agent-autoloop uninstall --yes` 停掉本次进程，再清掉自己创建的临时目录。不要卸载用户已经在用的中台。
 
 ## 文档
 
-- [配置手册](skills/agent-hub/SKILL.md)：接事件插件、通道、多台电脑和交付流水线。
+- [配置手册](skills/agent-autoloop/SKILL.md)：接事件插件、通道、多台电脑和交付流水线。
 - [协议](docs/protocol.md)：HTTP、回执、事实日志和故障恢复。
 - [插件](docs/plugins.md)：三个可运行的最小例子。
 - [安全边界](SECURITY.md)：密钥、执行权限和交付审查。

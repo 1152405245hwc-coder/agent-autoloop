@@ -16,7 +16,7 @@ import webhook from "../plugins/webhook/channel.ts";
 import github from "../plugins/github/source.ts";
 import type { Card } from "../host/channels.ts";
 
-const dir = mkdtempSync(join(tmpdir(), "agent-hub-channels-"));
+const dir = mkdtempSync(join(tmpdir(), "agent-autoloop-channels-"));
 after(() => rmSync(dir, { recursive: true, force: true }));
 
 const base: Card = {
@@ -107,7 +107,7 @@ esac
   await feishu({ hub: hub as any, options: { user: "ou_me", lark }, log: () => {}, signal: stop.signal });
   const lines = readFileSync(log, "utf8").trim().split("\n");
   const sends = lines.filter((l) => l.includes("+messages-send"));
-  assert.ok(sends[0].includes("--idempotency-key agent-hub-card-5"), "the key doesn't change with the version");
+  assert.ok(sends[0].includes("--idempotency-key agent-autoloop-card-5"), "the key doesn't change with the version");
   assert.ok(sends[0].includes("--user-id ou_me"));
   assert.ok(
     lines.some((l) => l.includes("messages patch --message-id om_5")),

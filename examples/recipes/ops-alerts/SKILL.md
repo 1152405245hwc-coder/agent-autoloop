@@ -17,7 +17,7 @@ description: 查中台派来的线上报错：对着代码找原因，告诉人�
 - 代码要改：发一张 notice，写清原因在哪、建议怎么改。
 - 重启能恢复：提问，这一轮到此结束，不要等。
 
-```agent-hub
+```agent-autoloop
 {"ask":[{"title":"checkout 一直报错，要重启吗？","text":"三行以内：出了什么事，影响谁，为什么重启能好。","options":["重启","先不动"],"recommend":0,"about":"选了重启就发 restart 事件","key":"restart"}]}
 ```
 
@@ -25,7 +25,7 @@ description: 查中台派来的线上报错：对着代码找原因，告诉人�
 
 选了“重启”：发下面这个事件，第一行写“已请求重启”。重启由规则里的脚本做，结果会直接告诉人，你不用核实。`id` 写 `restart-` 加卡片编号，`subject` 用这次事件的 subject。
 
-```agent-hub
+```agent-autoloop
 {"events":[{"id":"restart-12","type":"restart","subject":"checkout","summary":"本人同意重启"}]}
 ```
 

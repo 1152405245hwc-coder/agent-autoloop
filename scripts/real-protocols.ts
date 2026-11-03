@@ -8,10 +8,10 @@ import { tmpdir, cpus } from "node:os";
 import { join } from "node:path";
 const mode = process.argv[2];
 assert.ok(["acp", "mcp"].includes(mode));
-const home = mkdtempSync(join(tmpdir(), `agent-hub-real-${mode}-`));
+const home = mkdtempSync(join(tmpdir(), `agent-autoloop-real-${mode}-`));
 const start = Date.now();
-process.env.AGENT_HUB_HOME = home;
-process.env.AGENT_HUB_RULES = join(home, "rules.json");
+process.env.AGENT_AUTOLOOP_HOME = home;
+process.env.AGENT_AUTOLOOP_RULES = join(home, "rules.json");
 const execute = (program: string, args: string[], env = process.env) =>
   new Promise<string>((resolve, reject) => {
     execFile(program, args, { cwd: home, env, timeout: 180000, maxBuffer: 8 * 1024 * 1024 }, (error, out, err) =>
@@ -61,7 +61,10 @@ try {
       JSON.stringify({ agent: "ACP Codex", turns: 2, resumed: true, machine: cpus()[0].model, ms: Date.now() - start }),
     );
   } else {
-    writeFileSync(process.env.AGENT_HUB_RULES, JSON.stringify({ sources: {}, agents: {}, channels: {}, rules: [] }));
+    writeFileSync(
+      process.env.AGENT_AUTOLOOP_RULES,
+      JSON.stringify({ sources: {}, agents: {}, channels: {}, rules: [] }),
+    );
     hub = await import("../host/runtime.ts");
     const { serve } = await import("../host/http.ts");
     server = serve(0);
@@ -94,12 +97,12 @@ try {
       "-c",
       'approval_policy="never"',
       "-c",
-      `mcp_servers.agent_hub.command=${JSON.stringify(process.execPath)}`,
+      `mcp_servers.agent_autoloop.command=${JSON.stringify(process.execPath)}`,
       "-c",
-      `mcp_servers.agent_hub.args=${JSON.stringify([join(import.meta.dirname, "../bin/agent-hub.ts"), "mcp"])}`,
+      `mcp_servers.agent_autoloop.args=${JSON.stringify([join(import.meta.dirname, "../bin/agent-autoloop.ts"), "mcp"])}`,
       "-c",
-      `mcp_servers.agent_hub.env={AGENT_HUB_HOME=${JSON.stringify(home)}}`,
-      "必须调用 agent_hub 的 status 工具查看状态，然后只回复：状态读取完成。不要调用其他工具。",
+      `mcp_servers.agent_autoloop.env={AGENT_AUTOLOOP_HOME=${JSON.stringify(home)}}`,
+      "必须调用 agent_autoloop 的 status 工具查看状态，然后只回复：状态读取完成。不要调用其他工具。",
     ]);
     assert.ok(calls > 0);
     assert.ok(out.includes("状态读取完成"));

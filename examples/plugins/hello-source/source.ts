@@ -1,7 +1,7 @@
 // The smallest webhook plugin, for a made-up system that POSTs { "id", "kind", "order", "note" } and signs the body with
 // HMAC-SHA256 in the x-shop-signature header. It only translates: it makes no requests, and it can't be async.
 //   rules.json:  "sources": { "shop": { "name": "shop", "adapter": "hello-source" } }
-//   secrets.env: AGENT_HUB_SECRET_SHOP=…
+//   secrets.env: AGENT_AUTOLOOP_SECRET_SHOP=…
 // The address to give the other side is /v1/in/shop.
 import { createHmac, timingSafeEqual } from "node:crypto";
 
