@@ -1,0 +1,353 @@
+# 协议
+
+整个系统是一个循环，三个口子。
+
+```
+          事件                领活
+  来源 ─────────▶  中台  ◀───────── 接单程序 ── Agent
+                   ▲ │
+              回答 │ │ 卡片
+                   │ ▼
+                  通道 ◀──▶ 你
+```
+
+**中台的内核不主动连接任何东西。** 来源、接单程序、通道都是它们自己连进来：内核不用知道它们在哪、用什么语言写、是哪家的产品，也不保管它们的凭据；你的电脑不用开放任何端口。协议就是下面这份 HTTP + JSON，写一个新插件只要会发 HTTP 请求。
+
+一台电脑上用时，一条命令把三样都跑在一个进程里，它们之间照样走这份协议。
+
+**中台没有界面。** 你和它打交道靠通道和命令行。想要一个页面或大屏，用「本人」一节的几个请求自己做，它和命令行是同等的客户端。
+
+## 六个词
+
+| 词 | 是什么 |
+|---|---|
+| **事件** | 发生了一件事：来源、编号、类型、对象、一句话、详情、回原处的链接。时间到了是事件，你点了卡片也是事件。 |
+| **规则** | 写在 `rules.json` 里：什么事件，交给哪个 Agent，在哪个目录，用哪个 Skill，什么时候告诉你。 |
+| **事项** | 同一条规则下同一个对象的事。事件归进事项，卡片、到期复查、会话都挂在事项上。规则没写 `parallel` 时，整条规则是一个事项。 |
+| **一轮** | 一次执行：领一批事件，交一份回执，然后结束。一轮会结束，事项会继续。 |
+| **回执** | Agent 的最后一条消息。它想让中台做的事全写在这里，这一轮结束时在一个事务里一次生效。 |
+| **卡片** | 给你看的东西。带选项的是提问，你选了就是一条新事件，事项接着往前走；不带选项的是通知。 |
+
+## 六条原则
+
+1. **注意力最贵。** 默认安静。没事不说话，能自己做的自己做完，只有规则写明要先问的事才打断你。
+2. **一切都是事件。** 外部系统、时间、到期复查、你的决定，走的是同一条路。
+3. **一切都连进来。** 内核没有对外的请求。凭据留在用它的地方，出事的范围也留在那里。
+4. **Agent 就是一个进程。** 给它提示词，它打印最后一条消息。Claude Code、Codex、任何命令行 Agent、一段脚本、一条 CI 流水线都一样，不需要 SDK。要启动远端工作的进程，负责跟到真正做完才退出。
+5. **一轮不等人。** 要问你就结束这一轮，收到回答后再开始处理，尽量接着原来的会话。等你的时候不占进程、不花 Token，重启也不丢。
+6. **规则才是指令。** 事件决定不了交给谁、在哪个目录、用哪个 Skill、给什么权限，这些只由规则决定。别人写的话不进提示词，只放进标明“是资料”的文件。这挡不住所有提示注入，但把最坏的结果限制在规则给定的范围里。
+
+## 规则
+
+```jsonc
+{
+  "timezone": "Asia/Shanghai",                       // 定时和“今天”用的时区，默认系统时区
+  "askFirst": ["删数据", "停服", "花钱", "对外发消息"],  // 只有这几类事 Agent 才先问你
+  "sources":  { "shop": { "name": "shop" }, "github": { "name": "GitHub", "adapter": "github" } },
+  "agents": {
+    "claude": { "name": "Claude Code", "worker": "mac-mini", "use": "claude", "model": "…", "effort": "high", "access": "edit" },
+    "cursor": { "name": "Cursor", "worker": "mac-mini", "use": "command", "command": ["agent", "-p", "--trust", "{prompt}"] }
+  },
+  "channels": { "feishu": { "name": "飞书", "answerers": ["ou_xxx"] } },
+  "rules": [{
+    "name": "处理告警",
+    "when": { "source": "shop", "types": ["alert.*"] },   // 或 { "cron": "0 9 * * *" }
+    "to": "claude", "cwd": "~/code/shop", "skill": "run-ops", "prompt": "按其中……一节处理。",
+    "group": "ops",                                        // 同一组一次一轮，默认就是规则名
+    "parallel": 3,                                         // 写了就按对象分事项：同一对象一次一轮，这一组最多 3 轮
+    "tell": "needed",                                      // always 每次 / needed 只在有卡片时（默认）/ never 不推送
+    "emits": { "source": "shop", "types": ["pr.*"] }      // 回执里能发什么事件，不写就不能发
+  }],
+  "elsewhere": [{ "name": "每周清理", "source": "shop", "to": "claude", "cron": "0 6 * * 0", "where": "Claude 应用的定时任务" }]
+}
+```
+
+`elsewhere` 是在别处定时跑的任务：中台不启动它们，只在 `agent-hub status` 里列出来，它们要找你时用 `POST /v1/tell`。规则写错了，文件改动不生效，旧规则继续跑，并推一张卡片告诉你错在哪。
+
+## 来源：把世界变成事件
+
+```
+POST /v1/events                    Authorization: Bearer <来源的密钥>
+{ "id": "12:new", "type": "feedback.new", "subject": "#12", "summary": "…", "detail": "…", "link": "https://…" }
+→ 200 { "event": 34, "duplicate": false, "routed": ["处理意见"] }
+```
+
+- `id` 和 `type` 必填。同一来源同一 `id` 只记一次，所以来源尽管重发。
+- `subject` 只能是标识符（字母、数字和 `# . _ : / @ -`），`link` 只能是纯 ASCII 网址，因为它们会进提示词。`summary`、`detail` 不进提示词。
+- 没有规则匹配的事件也留着，`agent-hub status` 看得到。
+
+三种别的进法，到中台都是同一种事件：
+
+- **定时**：规则写 `cron`。错过的（比如电脑合盖了）醒来只补最近的一次。重复的时刻（夏令时）只跑第一次，不存在的时刻跳过。
+- **别人家的 Webhook**：`POST /v1/in/<来源>`。来源配了 `adapter`，就交给 `plugins/<adapter>/source.ts` 里的函数验签、翻译成事件，它只翻译，不发请求。验签用的秘密放在 `secrets.env`，不进 `rules.json`。
+- **轮询**：不用连公网，没新东西不花 Token。规则定时叫一段脚本（也是一个 Agent），脚本在回执的 `events` 里交回新事件。事件的 `id` 要稳定，读的范围可以重叠，中台会去重；脚本要在回执交出去之后才推进自己的游标，或者干脆不留游标。
+
+来源或 `elsewhere` 任务有话要直接告诉你（不用 Agent 处理）：
+
+```
+POST /v1/tell    { "key": "weekly-44", "text": "…" }              Authorization: Bearer <来源的密钥>
+POST /v1/tell    { "task": "每周清理", "key": "x", "text": "…" }   Authorization: Bearer <接单程序的密钥>
+→ 200 { "card": 56, "duplicate": false }
+```
+
+## Agent：领活、干活、交回执
+
+每台电脑上有一个接单程序，它只往外连。一台接单程序可以服务多个 Agent。
+
+```
+GET /v1/work?claim=<这次领活的编号>&wait=50&running=7,8&capacity=1    Authorization: Bearer <接单程序的密钥>
+→ 200 { "job": null | Job, "cancel": [7] }
+```
+
+- 没活时最多等 `wait` 秒，新活一来立即返回。`running` 是手上在跑的，同时也是心跳。`capacity=0` 只报到、不领活。
+- 响应丢了，用同一个 `claim` 再来一次，拿回的是同一份活。
+- `cancel` 是要停掉的。停完交一份 `outcome: "cancelled"` 的结果，这个事项才放开。
+
+```jsonc
+// Job：一轮的全部。token 只对这一轮的这一次执行有效。
+{
+  "run": 12, "token": "…", "attempt": 1,
+  "rule": { "name": "处理告警", "cwd": "~/code/shop", "skill": "run-ops", "prompt": "按其中……处理。" },
+  "agent": { "id": "claude", "name": "Claude Code", "use": "claude", "model": "…", "effort": "high", "access": "edit" },
+  "session": null,       // 尽量接着的会话：重派时是上一次的，回答来了是提问那一轮的。接不上就开新的，所以它只是优化
+  "askFirst": ["删数据", "…"],
+  "context": {           // 接单程序把它写成文件交给 Agent，都是资料
+    "events":  [{ "id", "source", "sourceName", "type", "subject", "summary", "detail", "link", "receivedAt" }],
+    "answers": [{ "card", "title", "options", "choice", "text", "about", "by", "at" }],  // 这一轮要接着做的决定
+    "timers":  [{ "key", "about", "at" }],                                               // 这一轮到期的复查
+    "waiting": [{ "key", "about", "at" }],                                               // 这个事项还没到期的复查
+    "open":    [{ "card", "title", "text", "at" }],                                      // 同来源同组还没收尾的卡片
+    "decided": [{ "card", "title", "choice", "at" }]                                     // 这个事项定过的事，只对当时那件事有效
+  }
+}
+```
+
+```
+POST /v1/runs/12/started   Authorization: Bearer <token>   { "session": "…", "link": "claude://…" }
+POST /v1/runs/12/result    Authorization: Bearer <token>   Result
+→ 200 { "rejected": [{ "card": 9, "reason": "不在本轮核对范围" }] }
+```
+
+```jsonc
+// Result
+{
+  "outcome": "done" | "nothing" | "failed" | "cancelled",
+  "summary": "一句话", "error": "没跑成的原因", "session": "…",
+  "usage": { "input": 0, "output": 0, "cached": 0, "cost": 0 },
+  // 下面就是回执，一个事务里一次生效
+  "ask":     [{ "title", "text", "options": ["…", "…"], "recommend": 0, "about": "留给接着干的自己", "key": "这件事的固定名字" }],
+  "notice":  [{ "title", "text", "key" }],
+  "resolve": [{ "card": 3, "reason": "在哪核实了已解决" }],
+  "later":   [{ "key": "…", "at": "2026-11-05T09:00:00+08:00", "about": "到时候查什么" }, { "key": "…", "cancel": true }],
+  "events":  [{ "id", "type", "subject", "summary", "detail", "link" }]
+}
+```
+
+- 结果可以重放：响应丢了，同一个 token 再交一次同样的内容，得到同样的确认；内容不同返回 409。
+- `failed` 会重派，所以它只带 `notice`，其余的不生效。
+- `ask` 的 `key` 范围是这个事项：同一个 `key` 的卡片还开着就不再发。关掉之后再问是新的一次。
+- `resolve` 只能结同来源、同组、这一轮领活前就有的卡片，越界的写进 `rejected`，不影响这一轮的结果。
+- `later` 的 `key` 范围是这个事项，同一个 `key` 再写一次就是改时间。
+- `events` 的来源由规则的 `emits` 决定，回执改不了。
+
+### Agent 只需要做一件事
+
+接单程序把提示词交给 Agent，Agent 的最后一条消息就是回执：
+
+````
+第一行一句话结论。没跑成写「没跑成：原因」，没事可做写「没事可做：原因」，其余都算做成了。
+
+```agent-hub
+{ "ask": [ … ], "notice": [ … ], "resolve": [ … ], "later": [ … ], "events": [ … ] }
+```
+````
+
+代码块可有可无。Agent 不需要装任何东西、不需要连中台，所以沙箱里的、云端的 Agent 也能接。
+
+回执写错不重做业务：接单程序接着原会话，只让它把最后一条消息重写一遍，最多两次。还是读不懂，就按第一行定结局，回执作废，推一张卡片告诉你原文在哪。
+
+### 接一个新 Agent
+
+规则里写一行，任何能打印最后一条消息的命令都行，退出码不是 0 就算没跑成：
+
+```json
+{ "name": "Hermes", "worker": "mac-mini", "use": "command", "command": ["hermes", "chat", "-Q", "-q", "{prompt}"] }
+```
+
+想要会话接续、打开会话的链接、用量统计，就在 `plugins/<名字>/agent.ts` 写一个文件（见 `plugins/claude/agent.ts`）：
+
+```ts
+export default {
+  command: (run) => [...],                                // 这一轮的命令行，run.resume 是要接着的会话
+  read: (output) => ({ text, session, usage, finished }), // 从输出里读出最后一条消息和会话
+  link: (session) => "…",                                 // 可选：打开这个会话的链接
+};
+```
+
+专用插件的 `access` 三档，翻译成各自 CLI 的权限：`read` 只读，`edit` 只改工作目录（默认），`full` 完整权限、不审批。只读不等于读不到密钥，要隔离密钥请用系统账号或容器。`command` 只传命令参数，不替任意程序限制权限。
+
+## 通道：把卡片送到你面前
+
+通道是一个往外连的小程序。
+
+```
+GET /v1/cards/next?wait=50    Authorization: Bearer <通道的密钥>
+→ 200 { "card": null | Card }
+
+// Card：这张卡片现在的样子。内容创建后不变，只有状态会变
+{ "id": 56, "version": 2, "ref": null, "kind": "ask", "state": "open",
+  "title": "…", "text": "…", "options": ["…", "…"], "recommend": 0,
+  "choice": null, "answer": null, "result": null, "link": null }
+```
+
+- `ref` 是空的就发一条新的；不是空的就把那条改成现在的样子，改不了就直接报告。
+- 发完报告：`POST /v1/cards/56/delivered { "version": 2, "ref": "om_xxx" }`。没报告的过一分钟会再给你。**支持幂等键的平台，发新消息只用卡片编号，不带版本**。平台不支持时无法保证去重，Webhook 模板可能在报告丢失后重发。
+- 发不出去：`POST /v1/cards/56/failed { "version": 2, "error": "…" }`。第一次发送隔得越来越久地重试，一小时后放弃（卡片还开着，`agent-hub status` 看得到）；通道一直没来领不算在内。
+- 还没送达就已经解决的卡片不再打扰你。
+- 你点了：`POST /v1/cards/56/answer { "choice": 1, "by": "ou_xxx", "ref": "om_xxx" }`。只有第一次算数，`by` 要在这个通道的 `answerers` 里，`ref` 要和送达的那条一致。不带选项的通知有一个“已处理”按钮，点了就结案。
+
+最小的通道只要十几行：领卡片、发文字和 `link`、报告。`link` 只给配了 `"links": true` 的通道，其他通道这里是 `null`。它打开一个不跑脚本的普通表单页，这张卡片的文字和按钮都在上面，谁拿到链接谁就能答，有效期 7 天，适合只会发文字的群机器人、邮件。能发按钮、能收回调的通道（比如飞书）用按钮，身份由平台核验，更安全。一台电脑上用时 `link` 是本机地址，手机打不开，要手机批请把中台放到有公网地址的机器上，并配好 `publicUrl`。
+
+## 本人：看全局、回答、结案、停止
+
+```
+GET  /v1/state              Authorization: Bearer <本人的密钥>
+→ 200 { "totals", "cards", "recentCards", "agents", "channels", "sources", "lines", "elsewhere", "runs", "nextBefore", "unrouted" }
+
+POST /v1/cards/56/answer    { "choice": 1 } 或 { "text": "别的想法" }
+POST /v1/cards/56/resolve   { "reason": "不用决定了，因为……" }
+POST /v1/runs/12/cancel     {}
+```
+
+`agent-hub status`、`answer`、`resolve`、`stop` 就是这几个请求。`/v1/state` 一次给最近 60 轮，`?before=<nextBefore>` 翻更早的。
+
+## 失败时会怎样
+
+| 出了什么事 | 会怎样 |
+|---|---|
+| 来源把同一条事件发了两遍 | 只记一次 |
+| 领活的响应丢了 | 同一个 `claim` 拿回同一份活 |
+| 交结果的响应丢了 | 重放得到同样的确认 |
+| Agent 没跑成 | 5 分钟后重派，每次翻倍，最长 1 小时；期间来的同一事项的事件并进这一轮；连续第 3 次告诉你 |
+| 原会话接不上 | 开新会话，靠资料文件接着干 |
+| 回执写错 | 只重写回执，不重做业务 |
+| 接单程序重启 | 在跑的 Agent 不受影响，回来接着盯 |
+| 接单程序在线，但 5 分钟没报手上的某一轮 | 标成“不确定”，放开这一组，告诉你；它后来交的结果照样收 |
+| 接单程序整台不见了 | 活留着不放开，10 分钟后告诉你一次，回来后这张卡片自动收尾 |
+| 中台重启 | 全在 SQLite 里，大家自动重连 |
+| 定时错过了 | 醒来只补最近一次 |
+| 你点了两次，或者两边同时点 | 只算第一次 |
+| 提问之后问题自己好了 | 后面的 Agent 核实后在 `resolve` 里结掉，卡片自动改成“不用决定了” |
+| 规则写错了 | 旧规则继续跑，告诉你错在哪 |
+
+这是“至少一次”的系统：Agent 可能被叫两次，所以 Skill 里有副作用的动作要先核实当前状态。
+
+## 谁能做什么
+
+| 凭据 | 能做 | 不能做 |
+|---|---|---|
+| 来源的密钥 | 以自己的名义发事件、发消息 | 冒充别的来源，领活 |
+| 接单程序的密钥 | 领交给它的活；以交给它的 `elsewhere` 任务的名义发消息 | 碰别人的活，发事件 |
+| 一轮的 token | 报告这一轮的这一次执行 | 碰别的轮次 |
+| 通道的密钥 | 领卡片、报告、转达 `answerers` 的回答 | 其他一切 |
+| 带权限的卡片链接 | 回答这一张卡片 | 其他一切 |
+| 本人的密钥 | 看全部、回答、结案、停止 | 发事件，领活，改规则（规则只在文件里） |
+
+普通访问密钥只保存 SHA-256；本机主密钥另存 `master.key`。接单程序不把中台密钥放进 Agent 的提示词或资料文件，文件系统的访问范围由 Agent 权限决定。
+
+## 日志与确定性
+
+每次被接受的输入产生一批事实，`commit` 在 SQLite WAL + FULL 的一个事务里追加日志并让 `evolve` 更新视图，提交完成才应答。规则版本、密钥哈希、领活、回执和回答都在日志里；日志从不存轮次 token、卡片链接 token 或中台主密钥。主密钥由外壳保存在本机文件，轮次 token 和卡片链接用 HMAC 分别推导。重复 claim 仍重新签发 token，上一份立即失效，保持现有行为。
+
+`decide(view, input, now, environment)` 不改传入视图和输入。`evolve(view, facts)` 是唯一的视图写入者；时钟、规则文件、随机材料、网络和单一定时器由外壳提供。事实包含版本、序号、时间、种类和规范化记录变更，重放不重新运行规则。启动重建在同一事务内读取日志和替换视图，不能覆盖期间的新提交。
+
+Node 请求转换层保持在 50 行内；文件、SQLite、监听和定时器也属于外壳。
+
+`GET /v1/stream?after=42` 仅接受本人的密钥，返回 SSE：`id` 是日志序号，`event: fact`，`data` 是事实 JSON。断线用 `Last-Event-ID` 或 `after` 从下一条继续；从 0 读全量。不给订阅者发送密钥哈希或能力凭据。
+
+`GET /v1/runs/42/why` 仅接受本人的密钥，返回与本轮事件、每次执行的规则版本、领取、回执、卡片回答有关的事实。命令行 `agent-hub why 42` 使用同一接口，默认显示事件、规则版本、领取者、起止时间、会话、回执、回答和接续轮次的时间线，不打印规则正文；`agent-hub why 42 --json` 输出原始事实。这些接口沿用本人的访问权限。内部回答和定时事件遇到已存在的编号时按序加后缀，保持来源与编号唯一，不覆盖来源的事件。
+
+## 一致性和复现
+
+插件入口统一为 `plugins/<名字>/agent.ts`、`channel.ts` 或 `source.ts`，先找安装目录，再找引擎内置目录。`agent-hub add <git 地址>` 将插件仓库克隆到安装目录的 `plugins/<仓库名>`，仓库根目录直接放入口文件，不自动更新，不执行安装脚本。插件是本人安装的可信代码，事件不能指定插件路径。
+
+事件接受可选的 `hops`，非负安全整数，缺省为 0。回执事件强制使用本轮所有事件最大 hops 加 1；提问的回答和 later 定时延续原深度。超过 8 的事件仍记录但不派发，并产生通知；重复提交不重复通知。这是中台内处理链的限制，外部来源直接发出的新事件可以从 0 开始。旧日志没有 hops 时按 0 读取。
+
+`DELETE /v1/keys/<source|worker|channel|owner>/<名字>` 只接受本人密钥，返回 `{ok:true}`。`agent-hub key remove <种类> <名字>` 调用正在运行的中台，删除立即唤醒并拒绝该密钥的长轮询，关闭日志订阅。已领取的一轮继续用独立的轮次 token 交结果。
+
+`protocol/schema.json` 使用 JSON Schema 2020-12，定义事件、回执、任务、卡片和日志的格式。`agent-hub conformance <测试地址> --config <文件>` 走真实 HTTP；文件包含 `keys`（source、worker、channel、owner 四把测试密钥）、能匹配测试规则的 `eventType` 和通道允许的 `answerer`。规则要能把该来源和类型交给该接单程序，`parallel` 至少为 2，通道要限制回答人。检查会写入事件和卡片，只在专用测试中台运行；同一个测试中台可以连续检查。各来源的签名格式由对应插件的测试检查。
+
+文字上限按 Unicode 码点计算。`usage` 必须是数值非负且有限的对象，不能是数组；`later.at` 必须是真实日期的 ISO 日期时间，带 `Z` 或时区偏移。回执先核验整体，再执行。
+
+`npm test` 包含种子 24301 的 200000 步模拟，以及两台接单程序、两条来源事件、一张问题卡片的全部 8! 种动作顺序。模拟每 128 步换一个独立场景，每个场景结束前停止故障并把工作处理完；每次状态转换都检查不变量和完整日志重放。定时事件由真实到期表触发，恢复后检查到期任务没有遗留。它证明这些有限场景，不代表任意大小状态空间已被穷尽。单独复现：`node sim/random.ts 24301 200000`、`node sim/enumerate.ts`。
+
+`npm run test:nightly` 做 1000 次真进程 SIGKILL、25 处可执行的内核变异和性能检查。崩溃用真 SQLite WAL + FULL，核对已确认序号、完整性、视图、重放和重复提交；它测进程退出，不模拟整机断电。变异漏过的名字和比例直接输出，不能用语法错误算检出。`node sim/crash.ts 1000 12648430` 和 `node sim/mutate.ts` 可分别复现。
+
+性能检查使用逐条 HTTP 写入，事务落盘后才应答。空闲 RSS 和千连接负载 RSS 分开测；检查实现见 `scripts/metrics.ts`，实测数字见 README。
+
+### ACP 和 MCP
+
+`use: "acp"` 配合 `command: ["某个 ACP 程序", "启动参数"]` 使用 stdio ACP v1。桥接先初始化，再新建或加载会话；加载时重放的历史不算这一轮的回复，思考和工具输出不进回执。只有 `end_turn` 且有最后一条文字消息才算完成。会话编号交给中台保存。没有声明文件读写、终端或交互登录能力，Agent 用自己的工具；需要登录时先用它自己的命令行登录。
+
+权限只选一次性的选项：`read` 允许结构化的读和搜索，`edit` 再允许工作目录内的编辑（核对符号链接），`full` 允许其他操作。未提供相应选项就取消。权限依赖 Agent 遵守 ACP，不提供额外的系统隔离。核对依据：[初始化](https://agentclientprotocol.com/protocol/v1/initialization)、[会话](https://agentclientprotocol.com/protocol/v1/session-setup)、[工具权限](https://agentclientprotocol.com/protocol/v1/tool-calls)。
+
+`agent-hub mcp` 提供 stdio MCP，固定支持 [2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle) 版，不支持 2026-07-28 的无握手协议。工具为 `status`、`why`、`answer`、`resolve`、`stop`、`emit`、`tell`；按本机已有的本人或来源密钥展示工具。它调用同样的 HTTP 接口，不直接改数据库；密钥留在本机 `config.json`。MCP 客户端把程序设为 `node`，参数设为引擎的绝对路径 `bin/agent-hub.ts` 和 `mcp`，环境里指定 `AGENT_HUB_HOME`。标准输出只写 JSON-RPC。
+
+### 通道模板与命令行示例
+
+Webhook 通道的 `config.json` 配置使用 `use: "webhook"`、`url` 和 `platform`，后者可选 `dingtalk`、`wecom`、`slack`、`discord`。不写 platform 时可用 `body` 自定义模板，字符串里的 `{text}` 替换为卡片内容。四个模板对照官方文档：[钉钉](https://open.dingtalk.com/document/orgapp/custom-bot-send-message-type)、[企微](https://developer.work.weixin.qq.com/document/path/91770)、[Slack](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/)、[Discord](https://discord.com/developers/docs/resources/webhook#execute-webhook)。钉钉和企微检查响应的 `errcode`，Slack 检查 `ok`；Discord 禁止文字触发提及。超过企微 2048 字节或 Discord 2000 字的卡片会报告失败，不截断问题或回答链接。Webhook 本身没有幂等保证，消息发送成功但报告丢失时可能重发。
+
+`examples/worker.sh` 和 `examples/channel.sh` 只用 shell 内置命令、curl、jq。设置 `AGENT_HUB_URL`、`AGENT_HUB_KEY` 后运行；`AGENT_HUB_ONCE=1` 只领一次。接单示例交回 `AGENT_HUB_RECEIPT` 中的 JSON，默认交回完成；通道示例把卡片输出到终端，再报告送达。它们是短任务示例，不适合长任务；长任务使用 `worker/` 的心跳、停止和恢复。`tests/examples.test.ts` 在通过协议一致性检查的临时中台上实际运行两个脚本，覆盖提问、送达、回答、继续和错误密钥。
+
+## 结构与预算
+
+一条只追加的事实日志是业务状态的来源；视图可重建，重放不重新执行规则。cron、later、重试、租约和离线判断共用到期表，外壳只安排下一次到期的定时器。接口是 HTTP + JSON；专用 CLI、MCP、来源、接单程序和通道都使用同一组接口。
+
+| 目录 | 职责 |
+|---|---|
+| `kernel/` | 确定性决策、演进、日志、到期、规则、请求处理、卡片表单 |
+| `src/` | Node HTTP、文件、SQLite、时钟、配置和进程入口 |
+| `protocol/` | 类型、JSON Schema、HTTP 一致性检查 |
+| `worker/`、`cli/` | 接单进程与用户命令 |
+| `plugins/` | Agent、来源、通道和交付，统一发现入口 |
+| `sim/` | 固定种子模拟、有界穷举、强杀与变异 |
+| `examples/` | curl/jq 示例和处理手册 |
+
+| 检查 | 上限或下限 |
+|---|---|
+| Node 运行时依赖 | 0 |
+| 内核行数 | ≤1600（包含空行、注释） |
+| 冷启动到监听 | ≤150 ms |
+| 启动后空闲 1 秒 RSS | ≤60 MB；负载 RSS 单列观测 |
+| 逐条 HTTP 提交、落盘后应答 | ≥2000 条/秒 |
+| 事件到等待者领活 p99 | ≤10 ms |
+| 同时长轮询 | ≥1000 |
+| 模拟吞吐 | ≥20000 步/秒 |
+
+这些是在 Apple M5 Pro 上的本地检查，不代表服务器容量。最新实测、机器、完整复现命令在 README。日志只追加，不压缩。没有总览页、工作流画布、Agent 记忆、模型路由、多租户或插件市场。
+
+## 交付插件
+
+交付是 `plugins/delivery` 的普通 Agent 进程，内核不认识它。项目仍用 `ops/delivery.json`，标签仍是 `deliver`、`deliver-attended`、`deliver-review`、`ask-owner`，提交状态仍为 `delivery`。审查状态默认 `agent-review`，由 `review.status` 修改；命令由 `review.command` 修改。设置格式、规则与 Ship 示例见[配置手册](../skills/agent-hub/SKILL.md#交付流水线)。
+
+来源只给事件，仓库与执行命令由中台规则固定。内置 `poll.ts` 读取待处理标签，以“仓库、事项、标签记录、当前提交”生成稳定事件编号，不另存游标。无标签、关闭且未合并、fork 或非 main 目标不启动交付。每个 PR 一个事项，并发由规则 `parallel` 和接单程序容量控制；进程失败使用中台的 5 分钟起重试和连续失败通知，不另建队列、槽位、失败计数或通知服务。
+
+| 步骤 | 必须满足 |
+|---|---|
+| 读取设置 | 用本轮 main 的固定提交读项目设置和审查要点，不读 PR 里的版本 |
+| 同步 | PR 已包含 main；缺少时请求 GitHub 同步后结束这一轮，由中台重试 |
+| 审查 | 裸 Git 对象转文字差异；只审分支自己的提交，排除干净合入 main 的变化，保留冲突解决；普通内部文档可略过模型 |
+| 审查进程 | 不检出 PR，不执行其中的代码、测试、设置或 hooks；默认 Codex 忽略用户配置和记忆，只读独立快照 |
+| 完整检查 | 草稿先转 ready；只接受当前提交最新一次 pull_request 工作流和指定 job 都完成且成功，草稿或 skipped job 不算 |
+| 合并 | 再读 PR head、main 和标签；变化就重来；检查通过后才写可配置的审查状态，按已审查 SHA 合并 |
+| 自动合并与响应丢失 | 先关闭已有自动合并并读回确认；合并响应丢失先看是否已经合并，不盲目再提交；清标签失败也读回确认是否已移除 |
+| 发布 | 等一个覆盖合并提交的 Ship 成功，再核对健康版本；健康 HTTP 200 不能覆盖 Ship 失败或尚未完成 |
+| 后续发布 | 新版覆盖且确实上线可以完成旧交付；已经完成的交付不因后来的失败发布倒退 |
+
+`deliver-review` 审查通过就结束并移除交付标签，不代表已检查、合并或上线。审查发现问题写 `delivery=failure`，交回问题；`deliver-attended` 不额外产生通知卡片。普通 issue 的 `ask-owner` 只将可读正文变成问题卡片，去掉代码块和本机路径，答复后移除标签。不向 GitHub 发评论，不建立 PR 说明里的多轮审查账本，也不支持用“已处理”文字豁免发现的问题；新提交重新审查。
+
+已经合并的 PR 直接继续跟踪 Ship 和健康检查。默认最多跟踪 30 分钟，超时交给中台重试；没有健康设置的项目明确报告只完成合并。发布范围对比**健康版本到目标提交的整个差异**：只有普通内部文档变化可跳过，可执行位、符号链接、重命名到外部路径、未知历史都要求发布；后来只有文档变化不能让尚未完成的代码发布被跳过。
+
+Ship 使用本引擎仓库的 `plugins/delivery/action.yml`，项目固定到发布后的完整提交。Action 只输出 `release` 和 `superseded`，项目已有发布步骤根据输出运行。它与交付进程共用 `project.ts` 的范围与健康判断，不在项目里长期复制工具。
+
+普通健康 URL 只允许 HTTPS。测试时必须显式传 `--test-local-health`，Action 同样要 `test-local-health: 'true'`，才接受 `http://127.0.0.1`；不接受其他 HTTP 地址。GitHub 合并规则由项目维护者设置。

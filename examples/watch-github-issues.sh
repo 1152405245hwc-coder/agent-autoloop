@@ -1,0 +1,19 @@
+#!/bin/sh
+# 定时看一眼 GitHub 有没有新 issue，没有新东西不花 Token。中台在家里、连不上公网也能用。
+#
+#   "agents": { "watcher": { "name": "轮询", "worker": "这台电脑", "use": "command", "command": ["/绝对路径/watch-github-issues.sh", "owner/repo"] } }
+#   "rules": [
+#     { "name": "看新 issue", "when": { "cron": "*/5 * * * *" }, "to": "watcher", "cwd": "~/", "tell": "never", "emits": { "source": "github", "types": ["issues.opened"] } },
+#     { "name": "处理 issue", "when": { "source": "github", "types": ["issues.opened"] }, "to": "claude", "cwd": "~/code/app", "skill": "handle-issue", "parallel": 3 }
+#   ]
+#
+# 不留游标：每次都读最近的，事件的 id 是稳定的，重复的中台只记一次。
+set -e
+REPO="$1"
+EVENTS=$(gh issue list --repo "$REPO" --state open --limit 30 --json number,title,url \
+  --jq 'map({id: ("issue-" + (.number|tostring)), type: "issues.opened", subject: ("#" + (.number|tostring)), summary: .title[0:200], link: .url})')
+echo "看了 $REPO 最近的 issue"
+echo
+echo '```agent-hub'
+echo "{\"events\":$EVENTS}"
+echo '```'
