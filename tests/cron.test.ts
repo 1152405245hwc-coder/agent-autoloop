@@ -12,7 +12,18 @@ const next = (text: string, after: string, zone = "Asia/Shanghai") => {
 };
 
 test("schedules are parsed strictly", () => {
-  for (const bad of ["", "* * * *", "60 * * * *", "* 24 * * *", "* * 0 * *", "* * * 13 *", "* * * * 8", "a * * * *", "5-1 * * * *", "*/0 * * * *"]) {
+  for (const bad of [
+    "",
+    "* * * *",
+    "60 * * * *",
+    "* 24 * * *",
+    "* * 0 * *",
+    "* * * 13 *",
+    "* * * * 8",
+    "a * * * *",
+    "5-1 * * * *",
+    "*/0 * * * *",
+  ]) {
     assert.equal(parseCron(bad), null, bad);
   }
   assert.ok(parseCron("*/5 1,2 1-5 * 0,7"));
@@ -46,10 +57,20 @@ test("a schedule that never comes says so", () => {
 
 test("the latest time due is found across a long gap without walking every minute of it", () => {
   const started = Date.now();
-  const latest = latestBefore(parseCron("* * * * *")!, Date.parse("2020-01-01T00:00:00Z"), Date.parse("2026-10-18T01:02:30Z"), "UTC");
+  const latest = latestBefore(
+    parseCron("* * * * *")!,
+    Date.parse("2020-01-01T00:00:00Z"),
+    Date.parse("2026-10-18T01:02:30Z"),
+    "UTC",
+  );
   assert.equal(new Date(latest).toISOString(), "2026-10-18T01:02:00.000Z");
   assert.ok(Date.now() - started < 1000);
-  const monthly = latestBefore(parseCron("0 0 1 * *")!, Date.parse("2026-07-01T00:00:00Z"), Date.parse("2026-10-18T00:00:00Z"), "UTC");
+  const monthly = latestBefore(
+    parseCron("0 0 1 * *")!,
+    Date.parse("2026-07-01T00:00:00Z"),
+    Date.parse("2026-10-18T00:00:00Z"),
+    "UTC",
+  );
   assert.equal(new Date(monthly).toISOString(), "2026-10-01T00:00:00.000Z");
 });
 

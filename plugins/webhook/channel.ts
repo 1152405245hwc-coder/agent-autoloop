@@ -1,17 +1,24 @@
 // The smallest channel there is: anything that takes a JSON POST (a group robot in DingTalk, WeCom, Slack, Discord…).
 // Words and a link, no buttons: pair it with "links": true in rules.json so the link itself can answer that one card.
-//   "channels": { "dingtalk": { "use": "webhook", "key": "…", "url": "https://…", "body": { "msgtype": "text", "text": { "content": "{text}" } } } }
-import type { Card, ChannelContext } from "../../src/channels.ts";
-import { payload, accepted } from "./templates.ts";
+//   "channels": { "dingtalk": { "use": "webhook", "key": "…", "url": "https://…",
+//                               "body": { "msgtype": "text", "text": { "content": "{text}" } } } }
+import { accepted, payload } from "./templates.ts";
+import type { Card, ChannelContext } from "../../host/channels.ts";
 
-const fill = (template: unknown, text: string): unknown => {
+function fill(template: unknown, text: string): unknown {
   if (typeof template === "string") return template.replaceAll("{text}", text);
   if (Array.isArray(template)) return template.map((item) => fill(item, text));
-  if (template && typeof template === "object") return Object.fromEntries(Object.entries(template).map(([k, v]) => [k, fill(v, text)]));
+  if (template && typeof template === "object") {
+    return Object.fromEntries(Object.entries(template).map(([key, value]) => [key, fill(value, text)]));
+  }
   return template;
-};
+}
 
-const words = (card: Card) => [card.title, card.text, ...(card.state === "open" ? [card.options.map((o, i) => `${i + 1}. ${o}`).join("\n"), card.link] : [])].filter(Boolean).join("\n\n");
+function words(card: Card) {
+  const choices = card.options.map((option, index) => `${index + 1}. ${option}`).join("\n");
+  const parts = [card.title, card.text, ...(card.state === "open" ? [choices, card.link] : [])];
+  return parts.filter(Boolean).join("\n\n");
+}
 
 export default async function webhook({ hub, options, log, signal }: ChannelContext) {
   while (!signal.aborted) {
@@ -31,8 +38,14 @@ export default async function webhook({ hub, options, log, signal }: ChannelCont
     }
     try {
       const response = await fetch(options.url as string, {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify(options.platform ? payload(String(options.platform), words(card)) : fill(options.body ?? { text: "{text}" }, words(card))), signal: AbortSignal.timeout(30_000),
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(
+          options.platform
+            ? payload(String(options.platform), words(card))
+            : fill(options.body ?? { text: "{text}" }, words(card)),
+        ),
+        signal: AbortSignal.timeout(30_000),
       });
       await accepted(String(options.platform ?? ""), response);
       await hub.delivered(card.id, card.version, `sent-${card.id}`);

@@ -5,10 +5,10 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileS
 import { homedir, hostname } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
-import { hubClient } from "../src/client.ts";
-import { CONFIG_FILE, readConfig, writeConfig, type Config } from "../src/config.ts";
-import { HOME, RULES_FILE } from "../src/home.ts";
-import { installService, removeService, serviceRunning } from "../src/service.ts";
+import { hubClient } from "../protocol/client.ts";
+import { CONFIG_FILE, readConfig, writeConfig, type Config } from "../host/config.ts";
+import { HOME, RULES_FILE } from "../host/home.ts";
+import { installService, removeService, serviceRunning } from "../host/service.ts";
 
 const HELP = `Agent 自动化中台
 
@@ -43,11 +43,16 @@ const HELP = `Agent 自动化中台
 
 配置和数据在 ${HOME}。规则在 ${RULES_FILE}，改了自动生效。`;
 
+type Flags = Record<string, string | true>;
+
 function flags(args: string[]) {
-  const named: Record<string, string | true> = {};
+  const named: Flags = {};
   const rest: string[] = [];
   for (let i = 0; i < args.length; i++) {
-    if (!args[i].startsWith("--")) { rest.push(args[i]); continue; }
+    if (!args[i].startsWith("--")) {
+      rest.push(args[i]);
+      continue;
+    }
     const name = args[i].slice(2);
     if (args[i + 1] !== undefined && !args[i + 1].startsWith("--")) named[name] = args[++i];
     else named[name] = true;
@@ -55,10 +60,14 @@ function flags(args: string[]) {
   return { named, rest };
 }
 const text = (value: string | true | undefined) => (typeof value === "string" ? value : undefined);
-const fail = (words: string): never => { console.error(words); process.exit(1); };
+const fail = (words: string): never => {
+  console.error(words);
+  process.exit(1);
+};
 
 const client = (key: string, config = readConfig()) => hubClient(config.url, key);
-const ownerClient = (config = readConfig()) => client(config.owner ?? fail("这台电脑上没有本人的密钥（只接活的电脑看不了）"), config);
+const ownerClient = (config = readConfig()) =>
+  client(config.owner ?? fail("这台电脑上没有本人的密钥（只接活的电脑看不了）"), config);
 
 /** The first rules of a new install: its agents and one rule to try the whole loop with. */
 function starterRules(agents: Record<string, object>, first: string) {
@@ -66,18 +75,24 @@ function starterRules(agents: Record<string, object>, first: string) {
     sources: { local: { name: "本机" } },
     agents,
     channels: {},
-    rules: [{
-      name: "试一下",
-      when: { source: "local", types: ["try.*"] },
-      to: first,
-      cwd: path.join(HOME, "try"),
-      prompt: "这是 agent-hub try 的试跑，不要改任何文件，不要做别的事。读资料文件。如果 answers 是空的，就问一个问题：title 写“试跑：选一个颜色”，text 写“这是一次试跑，选哪个都行。”，options 写 [\"蓝色\",\"绿色\"]，key 写 try-color，第一行结论写“问了一个问题”。如果 answers 不是空的，第一行结论写“你选了某某，试跑通过”，把某某换成 answers 里选的那一项，不附回执。",
-    }],
+    rules: [
+      {
+        name: "试一下",
+        when: { source: "local", types: ["try.*"] },
+        to: first,
+        cwd: path.join(HOME, "try"),
+        prompt:
+          "这是 agent-hub try 的试跑，不要改任何文件，不要做别的事。读资料文件。" +
+          "如果 answers 是空的，就问一个问题：title 写“试跑：选一个颜色”，text 写“这是一次试跑，选哪个都行。”，" +
+          'options 写 ["蓝色","绿色"]，key 写 try-color，第一行结论写“问了一个问题”。' +
+          "如果 answers 不是空的，第一行结论写“你选了某某，试跑通过”，把某某换成 answers 里选的那一项，不附回执。",
+      },
+    ],
     elsewhere: [],
   };
 }
 
-/** Shows the user's Agents how to set it up. Only for the install in its usual place, and never over something of theirs. */
+/** Shows the user's Agents how to set it up. Only for the install in its usual place, never over their own. */
 function linkSkill() {
   if (process.env.AGENT_HUB_HOME) return;
   for (const agent of [".claude", ".codex"]) {
@@ -89,33 +104,59 @@ function linkSkill() {
   }
 }
 
+/** What was asked for on the command line, or whichever of the usual Agents is installed. */
+async function agentsToUse(named: Flags, worker: string) {
+  const agents: Record<string, { name: string; worker: string; use: string; command?: string[] }> = {};
+  const command = text(named.command);
+  if (command) {
+    agents.agent = { name: "Agent", worker, use: "command", command: command.split(/\s+/) };
+    return agents;
+  }
+  const wanted = text(named.agent);
+  const { adapterFor } = await import("../worker/agents.ts");
+  const emptyTurn = {
+    prompt: "",
+    session: "",
+    resume: null,
+    cwd: "",
+    access: "edit",
+    contextFile: "",
+    folder: "",
+  } as const;
+  for (const name of ["claude", "codex"]) {
+    if (wanted && wanted !== name) continue;
+    const adapter = await adapterFor(name);
+    try {
+      // An adapter finds its program to build the command line, and throws if it's not there.
+      adapter.command(emptyTurn);
+      agents[name] = { name: name === "claude" ? "Claude Code" : "Codex", worker, use: name };
+    } catch {}
+  }
+  return agents;
+}
+
 async function init(args: string[]) {
   const { named } = flags(args);
   if (existsSync(CONFIG_FILE)) return fail(`已经装过了：${CONFIG_FILE}`);
   mkdirSync(HOME, { recursive: true, mode: 0o700 });
   mkdirSync(path.join(HOME, "try"), { recursive: true });
-  const worker = hostname().toLowerCase().replace(/\.local$/, "").replace(/[^a-z0-9-]/g, "-").replace(/^[^a-z]+/, "") || "this-machine";
-  const agents: Record<string, object> = {};
-  const command = text(named.command);
-  if (command) agents.agent = { name: "Agent", worker, use: "command", command: command.split(/\s+/) };
-  else {
-    const wanted = text(named.agent);
-    for (const name of ["claude", "codex"]) {
-      if (wanted && wanted !== name) continue;
-      const adapter = await (await import("../worker/agents.ts")).adapterFor(name);
-      let installed = false;
-      try {
-        adapter.command({ prompt: "", session: "", resume: null, cwd: "", access: "edit", contextFile: "", folder: "" });
-        installed = true;
-      } catch {}
-      if (installed) agents[name] = { name: name === "claude" ? "Claude Code" : "Codex", worker, use: name };
-    }
-    if (!Object.keys(agents).length) return fail("这台电脑上没找到 Claude Code 或 Codex。先装好并登录，或者用 --command 指定别的命令行 Agent，比如 --command 'hermes chat -Q -q {prompt}'");
+  const hostName = hostname()
+    .toLowerCase()
+    .replace(/\.local$/, "");
+  const worker = hostName.replace(/[^a-z0-9-]/g, "-").replace(/^[^a-z]+/, "") || "this-machine";
+  const agents = await agentsToUse(named, worker);
+  if (!Object.keys(agents).length) {
+    return fail(
+      "这台电脑上没找到 Claude Code 或 Codex。先装好并登录，" +
+        "或者用 --command 指定别的命令行 Agent，比如 --command 'hermes chat -Q -q {prompt}'",
+    );
   }
   const port = text(named.port) ?? "3350";
   const url = `http://127.0.0.1:${port}`;
-  if (!existsSync(RULES_FILE)) writeFileSync(RULES_FILE, `${JSON.stringify(starterRules(agents, Object.keys(agents)[0]), null, 2)}\n`);
-  const { addKey } = await import("../src/runtime.ts");
+  if (!existsSync(RULES_FILE)) {
+    writeFileSync(RULES_FILE, `${JSON.stringify(starterRules(agents, Object.keys(agents)[0]), null, 2)}\n`);
+  }
+  const { addKey } = await import("../host/runtime.ts");
   const config: Config = {
     url,
     hub: { listen: `127.0.0.1:${port}`, publicUrl: url },
@@ -126,13 +167,15 @@ async function init(args: string[]) {
   writeConfig(config);
   linkSkill();
   if (!named["no-service"]) installService();
-  console.log(`装好了。\n  Agent：${Object.values(agents).map((a) => (a as { name: string }).name).join("、")}\n  规则：${RULES_FILE}\n\n运行 agent-hub try 跑一遍完整流程。`);
+  const names = Object.values(agents).map((agent) => agent.name);
+  console.log(`装好了。\n  Agent：${names.join("、")}\n  规则：${RULES_FILE}\n\n运行 agent-hub try 跑一遍完整流程。`);
 }
 
 async function join(args: string[]) {
   const { named, rest } = flags(args);
   const [url] = rest;
-  const name = text(named.worker), key = text(named.key);
+  const name = text(named.worker);
+  const key = text(named.key);
   if (!url || !name || !key) return fail("用法：agent-hub join <中台地址> --worker <名字> --key <密钥>");
   writeConfig({ url, worker: { name, key } });
   if (!named["no-service"]) installService();
@@ -146,12 +189,16 @@ type Card = { id: number; kind: string; title: string; text: string; options: st
 function showCard(card: Card) {
   console.log(`\n【${card.kind === "ask" ? "等你决定" : "要你留意"}】#${card.id} ${card.title}`);
   if (card.text) console.log(card.text);
-  if (card.kind === "ask") card.options.forEach((option, i) => console.log(`  ${i + 1}. ${option}${i === card.recommend ? "（推荐）" : ""}`));
+  if (card.kind !== "ask") return;
+  card.options.forEach((option, index) => {
+    console.log(`  ${index + 1}. ${option}${index === card.recommend ? "（推荐）" : ""}`);
+  });
 }
 
-const howToAnswer = (card: Card) => (card.kind === "ask"
-  ? `回答：agent-hub answer ${card.id} <序号>，或者 agent-hub answer ${card.id} --text '别的想法'`
-  : `处理完了：agent-hub answer ${card.id}`);
+const howToAnswer = (card: Card) =>
+  card.kind === "ask"
+    ? `回答：agent-hub answer ${card.id} <序号>，或者 agent-hub answer ${card.id} --text '别的想法'`
+    : `处理完了：agent-hub answer ${card.id}`;
 
 async function chooseAt(terminal: ReturnType<typeof createInterface>, card: Card) {
   for (;;) {
@@ -166,16 +213,23 @@ async function tryIt() {
   if (!config.source) return fail("这台电脑上没有来源的密钥。");
   const owner = ownerClient(config);
   const stamp = Date.now();
-  await client(config.source.key, config).event({ id: `try-${stamp}`, type: "try.start", subject: `#${stamp}` }).catch((error) => fail(`连不上中台（${error.message}）：先 agent-hub up 或 agent-hub service install`));
+  await client(config.source.key, config)
+    .event({ id: `try-${stamp}`, type: "try.start", subject: `#${stamp}` })
+    .catch((error) => fail(`连不上中台（${error.message}）：先 agent-hub up 或 agent-hub service install`));
   console.log("事件发出去了，Agent 开始干活……");
   let asked: number | null = null;
   for (let i = 0; i < 300; i++) {
     await sleep(1000);
     const state = await owner.state();
-    const failed = state.runs.find((r: { rule: string; state: string; attempts: number; error: string }) => r.rule === "试一下" && r.state === "queued" && r.attempts > 0);
+    const failed = state.runs.find(
+      (run: { rule: string; state: string; attempts: number; error: string }) =>
+        run.rule === "试一下" && run.state === "queued" && run.attempts > 0,
+    );
     if (failed) return fail(`Agent 没跑成：${failed.error}\n运行 agent-hub doctor 看看。`);
     if (asked === null) {
-      const card: Card | undefined = state.cards.find((c: Card) => c.kind === "ask" && c.title.startsWith("试跑"));
+      const card: Card | undefined = state.cards.find(
+        (open: Card) => open.kind === "ask" && open.title.startsWith("试跑"),
+      );
       if (!card) continue;
       asked = card.id;
       console.log("\nAgent 结束了这一轮，问了你一个问题。它现在不占进程、不花 Token。");
@@ -191,40 +245,62 @@ async function tryIt() {
       console.log("收到，Agent 接着干……");
       continue;
     }
-    const done = state.recentCards.find((c: { id: number; state: string }) => c.id === asked && c.state === "done");
+    const done = state.recentCards.find(
+      (card: { id: number; state: string }) => card.id === asked && card.state === "done",
+    );
     if (done) {
-      console.log(`它把活干完了：${done.result}\n\n通了。接下来把 ${RULES_FILE} 改成你自己的规则，或者跟你的 Agent 说一句。`);
+      console.log(
+        `它把活干完了：${done.result}\n\n通了。接下来把 ${RULES_FILE} 改成你自己的规则，或者跟你的 Agent 说一句。`,
+      );
       return;
     }
   }
   fail("十分钟没等到结果。运行 agent-hub doctor 看看。");
 }
 
-const RUN_STATES: Record<string, string> = { claimed: "在跑", queued: "排队", done: "做完了", nothing: "没事可做", unknown: "不确定", cancelled: "停了" };
+const RUN_STATES: Record<string, string> = {
+  claimed: "在跑",
+  queued: "排队",
+  done: "做完了",
+  nothing: "没事可做",
+  unknown: "不确定",
+  cancelled: "停了",
+};
 
 async function status() {
   const state = await ownerClient().state();
-  const t = state.totals;
-  const at = (iso: string) => new Date(iso).toLocaleString("zh-CN", { timeZone: state.timezone, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-  console.log(`在跑 ${t.running} · 排队 ${t.queued} · 今天做完 ${t.doneToday} · 等你 ${state.cards.length}\n`);
-  for (const a of state.agents) console.log(`${a.online ? "●" : "○"} ${a.name}（${a.worker}）`);
-  for (const c of state.channels) console.log(`${c.online ? "●" : "○"} ${c.name}`);
-  for (const c of state.cards) {
-    showCard(c);
-    console.log(howToAnswer(c));
+  const { totals } = state;
+  const clock = { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" } as const;
+  const at = (iso: string) => new Date(iso).toLocaleString("zh-CN", { timeZone: state.timezone, ...clock });
+  console.log(
+    `在跑 ${totals.running} · 排队 ${totals.queued} · 今天做完 ${totals.doneToday} · 等你 ${state.cards.length}\n`,
+  );
+  for (const agent of state.agents) console.log(`${agent.online ? "●" : "○"} ${agent.name}（${agent.worker}）`);
+  for (const channel of state.channels) console.log(`${channel.online ? "●" : "○"} ${channel.name}`);
+  for (const card of state.cards) {
+    showCard(card);
+    console.log(howToAnswer(card));
   }
-  const timed = [...state.lines.filter((l: { every: string | null }) => l.every), ...state.elsewhere];
+  const timed = [...state.lines.filter((line: { every: string | null }) => line.every), ...state.elsewhere];
   if (timed.length) console.log("\n定时");
-  for (const line of timed) console.log(`  ${line.name}${line.where ? `（在别处：${line.where}）` : ""}：${line.every}，下次 ${at(line.next)}`);
+  for (const { name, where, every, next } of timed) {
+    console.log(`  ${name}${where ? `（在别处：${where}）` : ""}：${every}，下次 ${at(next)}`);
+  }
   if (state.recentCards.length) console.log("\n最近的卡片");
-  for (const c of state.recentCards.slice(0, 5)) {
-    const chosen = c.choice !== null ? c.options[c.choice] : c.answer;
-    console.log(`  #${c.id} ${c.title}：${[chosen, c.result].filter(Boolean).join("。") || c.text}`);
+  for (const card of state.recentCards.slice(0, 5)) {
+    const chosen = card.choice !== null ? card.options[card.choice] : card.answer;
+    console.log(`  #${card.id} ${card.title}：${[chosen, card.result].filter(Boolean).join("。") || card.text}`);
   }
   if (state.runs.length) console.log("\n最近几轮");
-  for (const r of state.runs.slice(0, 8)) console.log(`  #${r.id} ${r.rule} ${r.state === "queued" && r.attempts > 0 ? "等重派" : (RUN_STATES[r.state] ?? r.state)}${r.summary || r.error ? `：${r.summary || r.error}` : ""}`);
+  for (const run of state.runs.slice(0, 8)) {
+    const shown = run.state === "queued" && run.attempts > 0 ? "等重派" : (RUN_STATES[run.state] ?? run.state);
+    const outcome = run.summary || run.error;
+    console.log(`  #${run.id} ${run.rule} ${shown}${outcome ? `：${outcome}` : ""}`);
+  }
   if (state.unrouted.length) console.log("\n没有规则接的事件");
-  for (const e of state.unrouted.slice(0, 5)) console.log(`  ${e.source} ${e.type} ${e.subject}${e.summary ? `：${e.summary}` : ""}`);
+  for (const { source, type, subject, summary } of state.unrouted.slice(0, 5)) {
+    console.log(`  ${source} ${type} ${subject}${summary ? `：${summary}` : ""}`);
+  }
 }
 
 async function answer(args: string[]) {
@@ -232,8 +308,17 @@ async function answer(args: string[]) {
   const card = Number(rest[0]);
   if (!Number.isInteger(card) || card < 1) return fail("用法：agent-hub answer <卡片> [序号] [--text 别的想法]");
   const words = text(named.text);
-  const done = await ownerClient().answer(card, { ...(rest[1] !== undefined && { choice: Number(rest[1]) - 1 }), ...(words && { text: words }) });
-  console.log(!done.changed ? "这张卡片已经处理过了，这次没有改动。" : done.state === "closed" ? "结案了。" : "收到，Agent 接着干。");
+  const done = await ownerClient().answer(card, {
+    ...(rest[1] !== undefined && { choice: Number(rest[1]) - 1 }),
+    ...(words && { text: words }),
+  });
+  console.log(
+    !done.changed
+      ? "这张卡片已经处理过了，这次没有改动。"
+      : done.state === "closed"
+        ? "结案了。"
+        : "收到，Agent 接着干。",
+  );
 }
 
 async function resolve(args: string[]) {
@@ -276,12 +361,19 @@ async function doctor() {
         say(agent.online, `${agent.name}（${agent.worker}）${agent.online ? "在线" : "不在线"}`);
         if (agent.worker === config.worker?.name) {
           const { adapterFor } = await import("../worker/agents.ts");
-          const problem = await adapterFor(agent.use).then((adapter) => adapter.check?.() ?? null, (error) => String(error.message));
+          const problem = await adapterFor(agent.use).then(
+            (adapter) => adapter.check?.() ?? null,
+            (error) => String(error.message),
+          );
           say(!problem, problem ?? `${agent.name} 可以用`);
         }
       }
       for (const channel of state.channels) say(channel.online, `${channel.name}${channel.online ? "在线" : "不在线"}`);
-      if (!state.channels.length) console.log("· 还没接通道：Agent 问你时不会主动告诉你，要自己运行 agent-hub status 看。接法见 skills/agent-hub/SKILL.md");
+      if (!state.channels.length) {
+        console.log(
+          "· 还没接通道：Agent 问你时不会主动告诉你，要自己运行 agent-hub status 看。接法见 skills/agent-hub/SKILL.md",
+        );
+      }
     } catch (error) {
       say(false, `读不到中台状态：${(error as Error).message}`);
     }
@@ -292,7 +384,7 @@ async function doctor() {
 /** The rules module reads the rules file as it loads; the checks here need to survive a bad one. */
 async function importRules() {
   try {
-    return await import("../src/runtime.ts");
+    return await import("../host/runtime.ts");
   } catch (error) {
     fail((error as Error).message);
     throw error;
@@ -307,13 +399,19 @@ async function check() {
 
 async function key(args: string[]) {
   const [action, kind, name] = args;
-  if(action==="remove"){await ownerClient().removeKey(kind,name);console.log("密钥已失效。");return;}
-  const { addKey, listKeys } = await import("../src/runtime.ts");
+  if (action === "remove") {
+    await ownerClient().removeKey(kind, name);
+    console.log("密钥已失效。");
+    return;
+  }
+  const { addKey, listKeys } = await import("../host/runtime.ts");
   if (action === "list") {
     for (const row of listKeys()) console.log(`${row.kind} ${row.name} ${row.created_at}`);
     return;
   }
-  if (action !== "new" || !["source", "worker", "channel", "owner"].includes(kind) || !name) return fail("用法：agent-hub key new <source|worker|channel|owner> <名字>");
+  if (action !== "new" || !["source", "worker", "channel", "owner"].includes(kind) || !name) {
+    return fail("用法：agent-hub key new <source|worker|channel|owner> <名字>");
+  }
   console.log(addKey(kind as "source", name));
 }
 
@@ -323,9 +421,12 @@ async function emit(args: string[]) {
   const type = rest[0] ?? fail("用法：agent-hub emit <类型>");
   const secret = text(named.key) ?? config.source?.key ?? fail("这台电脑上没有来源的密钥：用 --key");
   const answer = await client(secret, config).event({
-    id: text(named.id) ?? randomUUID(), type,
-    ...(text(named.subject) && { subject: text(named.subject) }), ...(text(named.summary) && { summary: text(named.summary) }),
-    ...(text(named.detail) && { detail: text(named.detail) }), ...(text(named.link) && { link: text(named.link) }),
+    id: text(named.id) ?? randomUUID(),
+    type,
+    ...(text(named.subject) && { subject: text(named.subject) }),
+    ...(text(named.summary) && { summary: text(named.summary) }),
+    ...(text(named.detail) && { detail: text(named.detail) }),
+    ...(text(named.link) && { link: text(named.link) }),
   });
   console.log(answer.routed.length ? `交给了：${answer.routed.join("、")}` : "记下了，没有规则接它。");
 }
@@ -343,6 +444,49 @@ async function tell(args: string[]) {
   console.log(answer.duplicate ? "这件事已经说过了，这次没再发。" : "说了。");
 }
 
+async function why(args: string[]) {
+  const id = Number(args[0]);
+  const facts = await ownerClient().why(id);
+  if (args.includes("--json")) return console.log(JSON.stringify(facts, null, 2));
+  const { formatWhy } = await import("./why.ts");
+  console.log(formatWhy(id, facts));
+}
+
+async function checkConformance(args: string[]) {
+  const { named, rest } = flags(args);
+  const file = text(named.config) ?? process.env.AGENT_HUB_CONFORMANCE;
+  if (!rest[0] || !file) return fail("用法：agent-hub conformance <测试中台地址> --config <测试凭据文件>");
+  const { conformance } = await import("../protocol/conformance.ts");
+  console.log(JSON.stringify(await conformance(rest[0], JSON.parse(readFileSync(file, "utf8"))), null, 2));
+}
+
+async function stop(args: string[]) {
+  await ownerClient().cancel(Number(args[0]));
+  console.log("通知它停了。");
+}
+
+function service(args: string[]) {
+  if (args[0] === "install") return installService();
+  if (args[0] === "remove") return removeService();
+  fail("用法：agent-hub service install|remove");
+}
+
+/** A plugin is a folder of its own under this install, named after its repository. */
+function addPlugin(args: string[]) {
+  const url = args[0] ?? fail("用法：agent-hub add <git 地址>");
+  const name = url
+    .replace(/\/$/, "")
+    .split(/[/:]/)
+    .at(-1)!
+    .replace(/\.git$/, "")
+    .toLowerCase();
+  if (!/^[a-z][a-z0-9-]*$/.test(name)) fail("插件仓库名要用小写字母、数字和 -");
+  mkdirSync(path.join(HOME, "plugins"), { recursive: true });
+  const clone = spawnSync("git", ["clone", "--", url, path.join(HOME, "plugins", name)], { stdio: "inherit" });
+  if (clone.status !== 0) fail("安装失败。");
+  console.log(`已安装 ${name}。`);
+}
+
 async function update() {
   const root = path.join(import.meta.dirname, "..");
   const pulled = spawnSync("git", ["-C", root, "pull", "--ff-only"], { stdio: "inherit" });
@@ -354,17 +498,14 @@ async function update() {
 const [command, ...args] = process.argv.slice(2);
 const commands: Record<string, () => unknown> = {
   mcp: async () => (await import("./mcp.ts")).mcp(),
-  add:()=>{const url=args[0]??fail("用法：agent-hub add <git 地址>"),name=url.replace(/\/$/,"").split(/[/:]/).at(-1)!.replace(/\.git$/,"").toLowerCase();if(!/^[a-z][a-z0-9-]*$/.test(name))fail("插件仓库名要用小写字母、数字和 -");mkdirSync(path.join(HOME,"plugins"),{recursive:true});const clone=spawnSync("git",["clone","--",url,path.join(HOME,"plugins",name)],{stdio:"inherit"});if(clone.status!==0)fail("安装失败。");console.log(`已安装 ${name}。`);},
+  add: () => addPlugin(args),
   init: () => init(args),
   join: () => join(args),
-  up: async () => (await import("../src/up.ts")).up(),
+  up: async () => (await import("../host/up.ts")).up(),
   try: tryIt,
   status,
-  why: async () => {
-    const id=Number(args[0]),facts=await ownerClient().why(id);
-    console.log(args.includes("--json") ? JSON.stringify(facts,null,2) : (await import("./why.ts")).formatWhy(id,facts));
-  },
-  conformance: async () => {const {named,rest}=flags(args);const file=text(named.config)??process.env.AGENT_HUB_CONFORMANCE;if(!rest[0]||!file)fail("用法：agent-hub conformance <测试中台地址> --config <测试凭据文件>");console.log(JSON.stringify(await (await import("../protocol/conformance.ts")).conformance(rest[0],JSON.parse(readFileSync(file!,"utf8"))),null,2));},
+  why: () => why(args),
+  conformance: () => checkConformance(args),
   answer: () => answer(args),
   resolve: () => resolve(args),
   doctor,
@@ -372,14 +513,16 @@ const commands: Record<string, () => unknown> = {
   key: () => key(args),
   emit: () => emit(args),
   tell: () => tell(args),
-  stop: async () => { await ownerClient().cancel(Number(args[0])); console.log("通知它停了。"); },
+  stop: () => stop(args),
   update,
-  service: () => (args[0] === "install" ? installService() : args[0] === "remove" ? removeService() : fail("用法：agent-hub service install|remove")),
+  service: () => service(args),
   help: () => console.log(HELP),
 };
 if (!command || !commands[command]) {
   console.log(HELP);
   if (command) process.exit(1);
 } else {
-  Promise.resolve().then(commands[command]).catch((error) => fail(error.message ?? String(error)));
+  Promise.resolve()
+    .then(commands[command])
+    .catch((error) => fail(error.message ?? String(error)));
 }

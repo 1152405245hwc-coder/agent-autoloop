@@ -17,23 +17,29 @@ import { setup } from "./helpers.ts";
 
 const home = setup("http");
 mkdirSync(join(home, "plugins", "echo"), { recursive: true });
-writeFileSync(join(home, "plugins", "echo", "source.ts"), `
+writeFileSync(
+  join(home, "plugins", "echo", "source.ts"),
+  `
 import { createHmac, timingSafeEqual } from "node:crypto";
 export default function ({ headers, body, secret }) {
   const sign = "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
   const given = String(headers["x-sign"] ?? "");
   if (given.length !== sign.length || !timingSafeEqual(Buffer.from(given), Buffer.from(sign))) throw new Error("bad signature");
   return JSON.parse(body).items;
-}`);
+}`,
+);
 process.env.AGENT_HUB_SECRET_HOOKS = "hook-secret";
-const { serve } = await import("../src/http.ts");
-const { addKey } = await import("../src/runtime.ts");
-const { all, one } = await import("../src/runtime.ts");
+const { serve } = await import("../host/http.ts");
+const { addKey } = await import("../host/runtime.ts");
+const { all, one } = await import("../host/runtime.ts");
 
 const keys = {
-  app: addKey("source", "app"), ops: addKey("source", "ops"),
-  w1: addKey("worker", "w1"), w2: addKey("worker", "w2"),
-  chat: addKey("channel", "chat"), plain: addKey("channel", "plain"),
+  app: addKey("source", "app"),
+  ops: addKey("source", "ops"),
+  w1: addKey("worker", "w1"),
+  w2: addKey("worker", "w2"),
+  chat: addKey("channel", "chat"),
+  plain: addKey("channel", "plain"),
   owner: addKey("owner", "owner"),
 };
 const server = serve(0, "127.0.0.1", { commit: "abc123" });
@@ -42,18 +48,31 @@ before(async () => {
   await new Promise((resolve) => server.once("listening", resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
-after(() => { server.closeAllConnections(); server.close(); });
+after(() => {
+  server.closeAllConnections();
+  server.close();
+});
 
-type Options = { key?: string; body?: unknown; raw?: string; method?: string; headers?: Record<string, string>; redirect?: RequestRedirect };
+type Options = {
+  key?: string;
+  body?: unknown;
+  raw?: string;
+  method?: string;
+  headers?: Record<string, string>;
+  redirect?: RequestRedirect;
+};
 async function call(path: string, { key, body, raw, method, headers, redirect }: Options = {}) {
   const response = await fetch(base + path, {
-    method: method ?? (body !== undefined || raw !== undefined ? "POST" : "GET"), redirect,
+    method: method ?? (body !== undefined || raw !== undefined ? "POST" : "GET"),
+    redirect,
     headers: { ...(key && { authorization: `Bearer ${key}` }), "content-type": "application/json", ...headers },
     body: raw ?? (body === undefined ? undefined : JSON.stringify(body)),
   });
   const text = await response.text();
   let json: any = null;
-  try { json = JSON.parse(text); } catch {}
+  try {
+    json = JSON.parse(text);
+  } catch {}
   return { status: response.status, json, text, headers: response.headers };
 }
 const note = (n: number) => ({ id: `n:${n}`, type: "feedback.new", subject: `#${n}` });
@@ -82,7 +101,15 @@ test("each door takes its own kind of key and no other", async () => {
 
 test("a bad body is refused", async () => {
   assert.equal((await call("/v1/events", { key: keys.app, raw: "{not json" })).status, 400);
-  assert.equal((await call("/v1/events", { key: keys.app, raw: JSON.stringify({ id: "x", type: "y", detail: "z".repeat(2 * 1024 * 1024) }) })).status, 413);
+  assert.equal(
+    (
+      await call("/v1/events", {
+        key: keys.app,
+        raw: JSON.stringify({ id: "x", type: "y", detail: "z".repeat(2 * 1024 * 1024) }),
+      })
+    ).status,
+    413,
+  );
   assert.equal((await call("/v1/events", { key: keys.app, body: { type: "no.id" } })).status, 400);
 });
 
@@ -99,16 +126,34 @@ test("a worker's wait: what arrives while it waits comes at once; nothing comes,
   const again = await call("/v1/work?claim=c-2&wait=0", { key: keys.w2 });
   assert.equal(again.json.job.run, got.json.job.run, "the same claim gets the same work back");
   // Only the latest token holds the run.
-  const refused = await call(`/v1/runs/${got.json.job.run}/result`, { key: got.json.job.token, body: { outcome: "done" } });
+  const refused = await call(`/v1/runs/${got.json.job.run}/result`, {
+    key: got.json.job.token,
+    body: { outcome: "done" },
+  });
   assert.equal(refused.status, 401);
-  assert.equal((await call(`/v1/runs/${again.json.job.run}/started`, { key: keys.w2, body: { link: "x://y" } })).status, 401, "a worker key isn't a run's token");
-  assert.equal((await call(`/v1/runs/${again.json.job.run}/started`, { key: again.json.job.token, body: { session: "s", link: "x://y" } })).status, 200);
+  assert.equal(
+    (await call(`/v1/runs/${again.json.job.run}/started`, { key: keys.w2, body: { link: "x://y" } })).status,
+    401,
+    "a worker key isn't a run's token",
+  );
+  assert.equal(
+    (
+      await call(`/v1/runs/${again.json.job.run}/started`, {
+        key: again.json.job.token,
+        body: { session: "s", link: "x://y" },
+      })
+    ).status,
+    200,
+  );
   const result = { outcome: "done", summary: "好了", ask: [{ title: "问", text: "怎么办", options: ["甲", "乙"] }] };
   const done = await call(`/v1/runs/${again.json.job.run}/result`, { key: again.json.job.token, body: result });
   assert.deepEqual(done.json, { rejected: [] });
   const replay = await call(`/v1/runs/${again.json.job.run}/result`, { key: again.json.job.token, body: result });
   assert.equal(replay.json.duplicate, true);
-  const conflict = await call(`/v1/runs/${again.json.job.run}/result`, { key: again.json.job.token, body: { outcome: "done", summary: "别的" } });
+  const conflict = await call(`/v1/runs/${again.json.job.run}/result`, {
+    key: again.json.job.token,
+    body: { outcome: "done", summary: "别的" },
+  });
   assert.equal(conflict.status, 409);
   const bad = await call(`/v1/work?claim=${"x".repeat(201)}&wait=0`, { key: keys.w2 });
   assert.equal(bad.status, 400);
@@ -118,7 +163,10 @@ test("a source tells under its own name, once per key; a worker only as its own 
   const told = await call("/v1/tell", { key: keys.app, body: { key: "weekly-44", text: "周报" } });
   assert.deepEqual([told.status, told.json.duplicate], [200, false]);
   assert.equal(one<{ title: string }>("SELECT title FROM cards WHERE id = ?", [told.json.card])!.title, "应用");
-  assert.equal((await call("/v1/tell", { key: keys.app, body: { key: "weekly-44", text: "周报" } })).json.duplicate, true);
+  assert.equal(
+    (await call("/v1/tell", { key: keys.app, body: { key: "weekly-44", text: "周报" } })).json.duplicate,
+    true,
+  );
   assert.equal((await call("/v1/tell", { key: keys.app, body: { key: "Bad Key", text: "x" } })).status, 400);
   assert.equal((await call("/v1/tell", { key: keys.app, body: { key: "k", text: " " } })).status, 400);
   assert.equal((await call("/v1/tell", { key: keys.app, body: { key: "k", text: "x", oops: 1 } })).status, 400);
@@ -126,8 +174,15 @@ test("a source tells under its own name, once per key; a worker only as its own 
   const task = await call("/v1/tell", { key: keys.w1, body: { task: "每周清理", key: "m", text: "要你看一眼" } });
   assert.equal(task.status, 200);
   assert.equal(one<{ title: string }>("SELECT title FROM cards WHERE id = ?", [task.json.card])!.title, "每周清理");
-  assert.equal((await call("/v1/tell", { key: keys.w2, body: { task: "每周清理", key: "m2", text: "x" } })).status, 401, "not a task of its agents");
-  assert.equal((await call("/v1/tell", { key: keys.w1, body: { task: "没有这个", key: "m3", text: "x" } })).status, 401);
+  assert.equal(
+    (await call("/v1/tell", { key: keys.w2, body: { task: "每周清理", key: "m2", text: "x" } })).status,
+    401,
+    "not a task of its agents",
+  );
+  assert.equal(
+    (await call("/v1/tell", { key: keys.w1, body: { task: "没有这个", key: "m3", text: "x" } })).status,
+    401,
+  );
 });
 
 test("a channel comes for cards, reports them, and passes on who answered; the list decides", async () => {
@@ -137,23 +192,46 @@ test("a channel comes for cards, reports them, and passes on who answered; the l
     const { json } = await call("/v1/cards/next?wait=0", { key: keys.chat });
     if (!json.card) break;
     seen.push(json.card);
-    assert.equal((await call(`/v1/cards/${json.card.id}/delivered`, { key: keys.chat, body: { version: json.card.version, ref: `om_${json.card.id}` } })).status, 200);
+    assert.equal(
+      (
+        await call(`/v1/cards/${json.card.id}/delivered`, {
+          key: keys.chat,
+          body: { version: json.card.version, ref: `om_${json.card.id}` },
+        })
+      ).status,
+      200,
+    );
   }
   const ask = seen.find((c) => c.kind === "ask");
   assert.deepEqual(ask.options, ["甲", "乙"]);
   const url = `/v1/cards/${ask.id}/answer`;
   assert.equal((await call(url, { key: keys.w1, body: { choice: 0, by: "me", ref: `om_${ask.id}` } })).status, 401);
-  assert.equal((await call(url, { key: keys.chat, body: { choice: 0, by: "stranger", ref: `om_${ask.id}` } })).status, 401);
+  assert.equal(
+    (await call(url, { key: keys.chat, body: { choice: 0, by: "stranger", ref: `om_${ask.id}` } })).status,
+    401,
+  );
   assert.equal((await call(url, { key: keys.chat, body: { choice: 0, by: "me", ref: "om_other" } })).status, 401);
   assert.equal((await call(url, { key: keys.chat, body: { choice: 9, by: "me", ref: `om_${ask.id}` } })).status, 400);
   const yes = await call(url, { key: keys.chat, body: { choice: 1, by: "me", ref: `om_${ask.id}` } });
   assert.deepEqual([yes.status, yes.json.changed], [200, true]);
-  assert.equal((await call(url, { key: keys.chat, body: { choice: 0, by: "me", ref: `om_${ask.id}` } })).json.changed, false);
+  assert.equal(
+    (await call(url, { key: keys.chat, body: { choice: 0, by: "me", ref: `om_${ask.id}` } })).json.changed,
+    false,
+  );
   const next = await call("/v1/work?claim=c-3&wait=0", { key: keys.w2 });
   assert.equal(next.json.job.context.answers[0].choice, 1);
-  await call(`/v1/runs/${next.json.job.run}/result`, { key: next.json.job.token, body: { outcome: "done", summary: "选了乙" } });
-  assert.equal((await call(`/v1/cards/${ask.id}/failed`, { key: keys.chat, body: { version: 1, error: "x" } })).status, 200);
-  assert.equal((await call("/v1/cards/99999/delivered", { key: keys.chat, body: { version: 1, ref: "x" } })).status, 404);
+  await call(`/v1/runs/${next.json.job.run}/result`, {
+    key: next.json.job.token,
+    body: { outcome: "done", summary: "选了乙" },
+  });
+  assert.equal(
+    (await call(`/v1/cards/${ask.id}/failed`, { key: keys.chat, body: { version: 1, error: "x" } })).status,
+    200,
+  );
+  assert.equal(
+    (await call("/v1/cards/99999/delivered", { key: keys.chat, body: { version: 1, ref: "x" } })).status,
+    404,
+  );
 });
 
 test("the owner's key reads everything, answers, resolves and stops; nothing else does, and there's no sign-in", async () => {
@@ -164,9 +242,15 @@ test("the owner's key reads everything, answers, resolves and stops; nothing els
 
   await call("/v1/events", { key: keys.app, body: note(50) });
   const job = (await call("/v1/work?claim=c-9&wait=0", { key: keys.w1 })).json.job;
-  const asked = { outcome: "done", ask: [{ title: "本人答", text: "选一个", options: ["甲", "乙"], key: "own" }], notice: [{ title: "看看", text: "这个" }] };
+  const asked = {
+    outcome: "done",
+    ask: [{ title: "本人答", text: "选一个", options: ["甲", "乙"], key: "own" }],
+    notice: [{ title: "看看", text: "这个" }],
+  };
   await call(`/v1/runs/${job.run}/result`, { key: job.token, body: asked });
-  const [card, notice] = (await call("/v1/state", { key: keys.owner })).json.cards.sort((a: any, b: any) => a.id - b.id).slice(-2);
+  const [card, notice] = (await call("/v1/state", { key: keys.owner })).json.cards
+    .sort((a: any, b: any) => a.id - b.id)
+    .slice(-2);
   assert.equal(card.link, null, "a link only goes to a channel allowed to have one");
   const url = `/v1/cards/${card.id}/answer`;
   assert.equal((await call(url, { body: { choice: 0 } })).status, 401);
@@ -183,7 +267,8 @@ test("the owner's key reads everything, answers, resolves and stops; nothing els
   assert.deepEqual((await call("/v1/work?claim=c-11&wait=0", { key: keys.w1 })).json.cancel, [waiting.json.job.run]);
 });
 
-const form = (path: string, fields: string) => call(path, { raw: fields, headers: { "content-type": "application/x-www-form-urlencoded" }, redirect: "manual" });
+const form = (path: string, fields: string) =>
+  call(path, { raw: fields, headers: { "content-type": "application/x-www-form-urlencoded" }, redirect: "manual" });
 /** Has the agent ask this, and gets the link the channel that's only allowed to send words was given. */
 async function linkFor(n: number, receipt: Record<string, unknown>) {
   await call("/v1/events", { key: keys.app, body: note(n) });
@@ -194,15 +279,24 @@ async function linkFor(n: number, receipt: Record<string, unknown>) {
     const { json } = await call("/v1/cards/next?wait=0", { key: keys.plain });
     if (!json.card) break;
     given = json.card;
-    await call(`/v1/cards/${json.card.id}/delivered`, { key: keys.plain, body: { version: json.card.version, ref: "p" } });
+    await call(`/v1/cards/${json.card.id}/delivered`, {
+      key: keys.plain,
+      body: { version: json.card.version, ref: "p" },
+    });
   }
   return { id: given.id as number, path: new URL(given.link).pathname };
 }
-const stored = (id: number) => one<{ state: string; choice: number | null; answer: string | null; by: string }>("SELECT state, choice, answer, by FROM cards WHERE id = ?", [id])!;
+const stored = (id: number) =>
+  one<{ state: string; choice: number | null; answer: string | null; by: string }>(
+    "SELECT state, choice, answer, by FROM cards WHERE id = ?",
+    [id],
+  )!;
 
 test("a card's link is a plain page: it shows that card as words, runs nothing, and only a press answers", async () => {
   const title = "<script>alert(1)</script>链接答";
-  const { id, path } = await linkFor(60, { ask: [{ title, text: "选一个 & <b>别的</b>", options: ["甲", "乙<i>"], recommend: 0 }] });
+  const { id, path } = await linkFor(60, {
+    ask: [{ title, text: "选一个 & <b>别的</b>", options: ["甲", "乙<i>"], recommend: 0 }],
+  });
   const page = await call(path);
   assert.equal(page.status, 200);
   assert.match(page.headers.get("content-type")!, /^text\/html/);
@@ -232,7 +326,9 @@ test("a card's link is a plain page: it shows that card as words, runs nothing, 
 });
 
 test("a card's link takes words of your own, and a notice has one button", async () => {
-  const asked = await linkFor(61, { ask: [{ title: "别的想法", text: "选一个", options: ["甲", "乙"], key: "words" }] });
+  const asked = await linkFor(61, {
+    ask: [{ title: "别的想法", text: "选一个", options: ["甲", "乙"], key: "words" }],
+  });
   assert.equal((await form(asked.path, `text=${encodeURIComponent("都不要")}`)).status, 303);
   assert.deepEqual([stored(asked.id).choice, stored(asked.id).answer], [null, "都不要"]);
   assert.ok((await call(asked.path)).text.includes("你选了「都不要」"));
@@ -245,12 +341,23 @@ test("a card's link takes words of your own, and a notice has one button", async
 });
 
 test("someone else's webhook goes through its source's adapter: signed, or not taken", async () => {
-  const items = JSON.stringify({ items: [{ id: "h1", type: "push.done", subject: "main" }, { id: "h2", type: "push.done" }] });
+  const items = JSON.stringify({
+    items: [
+      { id: "h1", type: "push.done", subject: "main" },
+      { id: "h2", type: "push.done" },
+    ],
+  });
   const sign = (body: string) => "sha256=" + createHmac("sha256", "hook-secret").update(body).digest("hex");
   const taken = await call("/v1/in/hooks", { raw: items, headers: { "x-sign": sign(items) } });
   assert.equal(taken.status, 200);
-  assert.deepEqual(taken.json.events.map((e: any) => e.duplicate), [false, false]);
-  assert.equal((await call("/v1/in/hooks", { raw: items, headers: { "x-sign": sign(items) } })).json.events[0].duplicate, true);
+  assert.deepEqual(
+    taken.json.events.map((e: any) => e.duplicate),
+    [false, false],
+  );
+  assert.equal(
+    (await call("/v1/in/hooks", { raw: items, headers: { "x-sign": sign(items) } })).json.events[0].duplicate,
+    true,
+  );
   const refused = await call("/v1/in/hooks", { raw: items, headers: { "x-sign": "sha256=00" } });
   assert.equal(refused.status, 401);
   assert.ok(!refused.text.includes("hook-secret"));
@@ -259,5 +366,6 @@ test("someone else's webhook goes through its source's adapter: signed, or not t
 });
 
 test("there's no other page: what's going on is read through the doors", async () => {
-  for (const path of ["/", "/index.html", "/app.js", "/style.css", "/../package.json"]) assert.equal((await call(path)).status, 404, path);
+  for (const path of ["/", "/index.html", "/app.js", "/style.css", "/../package.json"])
+    assert.equal((await call(path)).status, 404, path);
 });

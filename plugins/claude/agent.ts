@@ -11,33 +11,52 @@ const PERMISSIONS = { read: "plan", edit: "acceptEdits", full: "bypassPermission
 function inTheApp() {
   const root = path.join(homedir(), "Library/Application Support/Claude/claude-code");
   if (!existsSync(root)) return [];
-  const versions = readdirSync(root).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).reverse();
-  return versions.flatMap((version) => readdirSync(path.join(root, version)).map((build) => path.join(root, version, build, "claude.app/Contents/MacOS/claude")));
+  const oldestFirst = readdirSync(root).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  return oldestFirst.reverse().flatMap((version) => {
+    const builds = readdirSync(path.join(root, version));
+    return builds.map((build) => path.join(root, version, build, "claude.app/Contents/MacOS/claude"));
+  });
 }
 
 export default {
   command: (turn) => [
-    findProgram("claude", inTheApp), "-p", turn.prompt,
+    findProgram("claude", inTheApp),
+    "-p",
+    turn.prompt,
     ...(turn.resume ? ["--resume", turn.resume] : ["--session-id", turn.session]),
-    "--output-format", "json",
+    "--output-format",
+    "json",
     ...(turn.model ? ["--model", turn.model] : []),
     ...(turn.effort ? ["--effort", turn.effort] : []),
-    "--permission-mode", PERMISSIONS[turn.access],
-    "--add-dir", turn.folder,
+    "--permission-mode",
+    PERMISSIONS[turn.access],
+    "--add-dir",
+    turn.folder,
     // A worktree moves the conversation away from where a later --resume looks for it.
     "--disallowedTools=EnterWorktree,ExitWorktree",
   ],
   read(stdout, code, stderr) {
     for (const line of stdout.split("\n").reverse()) {
       let result: any;
-      try { result = JSON.parse(line); } catch { continue; }
+      try {
+        result = JSON.parse(line);
+      } catch {
+        continue;
+      }
       if (result?.type !== "result") continue;
-      const usage = result.usage ? {
-        input: result.usage.input_tokens ?? 0, output: result.usage.output_tokens ?? 0,
-        cached: (result.usage.cache_read_input_tokens ?? 0) + (result.usage.cache_creation_input_tokens ?? 0), cost: result.total_cost_usd ?? 0,
-      } : undefined;
+      const usage = result.usage
+        ? {
+            input: result.usage.input_tokens ?? 0,
+            output: result.usage.output_tokens ?? 0,
+            cached: (result.usage.cache_read_input_tokens ?? 0) + (result.usage.cache_creation_input_tokens ?? 0),
+            cost: result.total_cost_usd ?? 0,
+          }
+        : undefined;
       const said = String(result.result ?? "");
-      if (result.is_error || result.subtype !== "success") return { session: result.session_id, usage, finished: true, error: said.split("\n")[0] || result.subtype || "没留下结果" };
+      if (result.is_error || result.subtype !== "success") {
+        const error = said.split("\n")[0] || result.subtype || "没留下结果";
+        return { session: result.session_id, usage, finished: true, error };
+      }
       return { text: said, session: result.session_id, usage, finished: true };
     }
     return code === null ? {} : { error: tail(stderr || stdout) || "没留下结果" };

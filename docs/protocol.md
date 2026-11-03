@@ -306,8 +306,8 @@ Webhook 通道的 `config.json` 配置使用 `use: "webhook"`、`url` 和 `platf
 | 目录 | 职责 |
 |---|---|
 | `kernel/` | 确定性决策、演进、日志、到期、规则、请求处理、卡片表单 |
-| `src/` | Node HTTP、文件、SQLite、时钟、配置和进程入口 |
-| `protocol/` | 类型、JSON Schema、HTTP 一致性检查 |
+| `host/` | Node HTTP、文件、SQLite、时钟、配置和进程入口 |
+| `protocol/` | 类型、JSON Schema、`rules.json` 校验、HTTP 客户端与一致性检查 |
 | `worker/`、`cli/` | 接单进程与用户命令 |
 | `plugins/` | Agent、来源、通道和交付，统一发现入口 |
 | `sim/` | 固定种子模拟、有界穷举、强杀与变异 |

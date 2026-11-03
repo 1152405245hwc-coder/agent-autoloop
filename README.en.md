@@ -9,7 +9,7 @@ An issue, an alert or a scheduled time becomes an event. Your rules choose the A
 - **Runs on one computer.** No public server is required; workers connect out to the hub.
 - **Replaceable Agents, sources and channels.** Any command-line program that prints a final message can connect.
 - **No Agent process while waiting for an answer.** Questions, answers and pending work persist across restarts.
-- **Zero runtime dependencies.** Node 24 runs the TypeScript directly; the kernel is 942 lines.
+- **Zero runtime dependencies.** Node 24 runs the TypeScript directly; the kernel is 1598 lines.
 
 [中文](README.md) | English
 

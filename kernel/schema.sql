@@ -1,4 +1,5 @@
--- Only ever added to: a migration that has shipped is never edited.
+-- The columns of the read-only SQL views over the projections. host/runtime.ts reads the table and column names and makes
+-- each table here a view; nothing is executed as written, which is why there are no indexes and no migrations.
 CREATE TABLE events (
   id INTEGER PRIMARY KEY,
   source TEXT NOT NULL,
@@ -12,7 +13,6 @@ CREATE TABLE events (
   received_at TEXT NOT NULL,
   UNIQUE (source, key)
 );
-CREATE INDEX events_received ON events (received_at);
 
 CREATE TABLE runs (
   id INTEGER PRIMARY KEY,
@@ -39,15 +39,12 @@ CREATE TABLE runs (
   error TEXT,
   usage TEXT
 );
-CREATE INDEX runs_state ON runs (state, agent, id);
-CREATE INDEX runs_lane ON runs (rule, lane, state);
 
 CREATE TABLE run_events (
   run_id INTEGER NOT NULL,
   event_id INTEGER NOT NULL,
   PRIMARY KEY (run_id, event_id)
 );
-CREATE INDEX run_events_event ON run_events (event_id);
 
 CREATE TABLE cards (
   id INTEGER PRIMARY KEY,
@@ -79,9 +76,6 @@ CREATE TABLE cards (
   decided_at TEXT,
   closed_at TEXT
 );
-CREATE INDEX cards_key ON cards (key, state);
-CREATE INDEX cards_state ON cards (state, grp);
-CREATE INDEX cards_answer_event ON cards (answer_event);
 
 CREATE TABLE deliveries (
   card_id INTEGER NOT NULL,
@@ -108,8 +102,6 @@ CREATE TABLE timers (
   event_id INTEGER,
   created_at TEXT NOT NULL
 );
-CREATE INDEX timers_due ON timers (event_id, at);
-CREATE INDEX timers_event ON timers (event_id);
 
 CREATE TABLE schedules (
   rule TEXT PRIMARY KEY,

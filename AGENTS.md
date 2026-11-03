@@ -15,9 +15,9 @@
 ## 怎么改
 
 - 测试写在实现之前，每个测试文件开头先写它防的失败方式；修 bug 先写复现它的失败测试。
-- `npm test` 和 `npm run typecheck` 都要过。
+- `npm test`、`npm run typecheck` 和 `npm run format:check` 都要过。
 - `npm test` 跑固定种子的 20 万步模拟与有界穷举；涉及日志、到期表或并发时还跑 `npm run test:nightly`。变异必须先证明原版测试实际执行且通过，不拿语法错误当检出。
-- 迁移（`migrations/`）只加不改。
+- 升级不写数据迁移。事实日志是唯一的持久状态，投影随时从日志重建；`kernel/schema.sql` 只声明查询视图的列，不按版本加迁移文件。
 - 面向用户的字用中文大白话；代码注释用英文，只写代码看不出来的原因。
 
 ## 审查要点
@@ -35,7 +35,7 @@
 
 ## 内核边界
 
-`decide(view, input, now, environment)` 只能产生事实；`evolve` 独占视图写入，`commit` 独占日志追加。内核不读时钟、不取随机数、不读环境或文件。时间、规则变更、主密钥和请求从外壳传入；`src/http.ts` 只把 Node 请求变成 Request，不超过 50 行。视图随时从日志重建，不能绕过日志改业务数据。规则版本、回答、回执都能用 `why` 和 `/v1/stream` 读到。
+`decide(view, input, now, environment)` 只能产生事实；`evolve` 独占视图写入，`commit` 独占日志追加。内核不读时钟、不取随机数、不读环境或文件。时间、规则变更、主密钥和请求从外壳传入；`host/http.ts` 只把 Node 请求变成 Request，不超过 50 行。视图随时从日志重建，不能绕过日志改业务数据。规则版本、回答、回执都能用 `why` 和 `/v1/stream` 读到。
 
 ## 插件与交付边界
 

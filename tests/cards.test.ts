@@ -13,16 +13,27 @@ import { test } from "node:test";
 import { at, setup } from "./helpers.ts";
 
 setup("cards");
-const { ingest } = await import("../src/runtime.ts");
-const { claimNext, finish, started } = await import("../src/runtime.ts");
-const { answer, resolve, nextCard, delivered, failed, tell, cardByToken, answerByLink } = await import("../src/runtime.ts");
+const { ingest } = await import("../host/runtime.ts");
+const { claimNext, finish, started } = await import("../host/runtime.ts");
+const { answer, resolve, nextCard, delivered, failed, tell, cardByToken, answerByLink } =
+  await import("../host/runtime.ts");
 const { AuthError, InputError, NotFound } = await import("../kernel/errors.ts");
 const { all, one, run } = await import("./storage.ts");
 
-const clean = () => { for (const table of ["run_events", "runs", "events", "seen", "cards", "deliveries", "timers"]) run(`DELETE FROM ${table}`); };
+const clean = () => {
+  for (const table of ["run_events", "runs", "events", "seen", "cards", "deliveries", "timers"])
+    run(`DELETE FROM ${table}`);
+};
 const note = (n: number, step = "new") => ({ id: `feedback:${n}:${step}`, type: `feedback.${step}`, subject: `#${n}` });
 const claim = (worker: string, now: number) => claimNext(worker, `c${Math.random()}`, now);
-const question = { title: "要不要删旧表", text: "占了 10 GB。", options: ["删", "留着"], recommend: 1, about: "表名 old_x，删之前先备份", key: "drop-old-x" };
+const question = {
+  title: "要不要删旧表",
+  text: "占了 10 GB。",
+  options: ["删", "留着"],
+  recommend: 1,
+  about: "表名 old_x，删之前先备份",
+  key: "drop-old-x",
+};
 const card = (id: number) => one<any>("SELECT * FROM cards WHERE id = ?", [id])!;
 
 /** A run on subject #n that ends by asking. */
@@ -60,8 +71,14 @@ test("an answer wakes the thread that asked, in its session, with what it left f
   const job = claim("w1", at(2))!;
   assert.equal(job.rule.name, "意见");
   assert.equal(job.session, "s-1");
-  assert.deepEqual(job.context.events.map((e) => [e.type, e.subject]), [["card.answered", "#1"]]);
-  assert.deepEqual(job.context.answers.map((a) => [a.card, a.title, a.options[a.choice!], a.about, a.by]), [[id, "要不要删旧表", "留着", "表名 old_x，删之前先备份", "me"]]);
+  assert.deepEqual(
+    job.context.events.map((e) => [e.type, e.subject]),
+    [["card.answered", "#1"]],
+  );
+  assert.deepEqual(
+    job.context.answers.map((a) => [a.card, a.title, a.options[a.choice!], a.about, a.by]),
+    [[id, "要不要删旧表", "留着", "表名 old_x，删之前先备份", "me"]],
+  );
   const before = card(id).version;
   finish(job.run, job.token, { outcome: "done", summary: "留着，已记下" }, at(3));
   assert.deepEqual([card(id).state, card(id).result], ["done", "留着，已记下"]);
@@ -78,7 +95,10 @@ test("an answer while another run holds the thread joins the next run, and a mer
   ingest("app", note(1, "decided"), at(3));
   finish(going.run, going.token, { outcome: "done", summary: "补充看过了" }, at(4));
   const next = claim("w1", at(4))!;
-  assert.deepEqual(next.context.events.map((e) => e.type), ["card.answered", "feedback.decided"]);
+  assert.deepEqual(
+    next.context.events.map((e) => e.type),
+    ["card.answered", "feedback.decided"],
+  );
   assert.equal(next.context.answers[0].card, id);
   assert.equal(next.session, "s-1");
 });
@@ -111,7 +131,11 @@ test("an answer counts once; a choice must exist; only one of answering and reso
 
   const other = asked(2, at(4)).id;
   assert.equal(resolve(other, "问题自己好了", "owner", at(5)), true);
-  assert.equal(answer(other, { choice: 0, by: "me" }, at(6)).changed, false, "resolved first: the late answer starts nothing");
+  assert.equal(
+    answer(other, { choice: 0, by: "me" }, at(6)).changed,
+    false,
+    "resolved first: the late answer starts nothing",
+  );
   assert.equal(all("SELECT id FROM events WHERE type = 'card.answered'").length, 1);
 });
 
@@ -138,7 +162,8 @@ test("a channel's answer must come from someone on its list, on the message it s
 test("a run may resolve only what it was given to check, and a bad id doesn't spoil its own result", () => {
   clean();
   const mine = asked(1).id;
-  const elsewhere = (() => { // Same source, other group.
+  const elsewhere = (() => {
+    // Same source, other group.
     ingest("ops", { id: "a", type: "alert.raised", subject: "x" }, at(0));
     const w2 = claim("w2", at(0))!;
     const w1 = claim("w1", at(0))!;
@@ -148,10 +173,32 @@ test("a run may resolve only what it was given to check, and a bad id doesn't sp
   })();
   ingest("app", note(2), at(1));
   const job = claim("w1", at(2))!;
-  assert.deepEqual(job.context.open.map((c) => c.card), [mine]);
-  const receipt = finish(job.run, job.token, { outcome: "done", summary: "好了", resolve: [{ card: mine, reason: "原站恢复了" }, { card: elsewhere, reason: "越界" }, { card: 9999, reason: "没这张" }] }, at(3));
-  assert.deepEqual(receipt.rejected.map((r) => r.card), [elsewhere, 9999]);
-  assert.deepEqual(receipt.rejected.map((r) => r.reason), ["不在本轮核对范围", "不在本轮核对范围"]);
+  assert.deepEqual(
+    job.context.open.map((c) => c.card),
+    [mine],
+  );
+  const receipt = finish(
+    job.run,
+    job.token,
+    {
+      outcome: "done",
+      summary: "好了",
+      resolve: [
+        { card: mine, reason: "原站恢复了" },
+        { card: elsewhere, reason: "越界" },
+        { card: 9999, reason: "没这张" },
+      ],
+    },
+    at(3),
+  );
+  assert.deepEqual(
+    receipt.rejected.map((r) => r.card),
+    [elsewhere, 9999],
+  );
+  assert.deepEqual(
+    receipt.rejected.map((r) => r.reason),
+    ["不在本轮核对范围", "不在本轮核对范围"],
+  );
   assert.equal(one<{ state: string }>("SELECT state FROM runs WHERE id = ?", [job.run])!.state, "done");
   assert.deepEqual([card(mine).state, card(mine).result], ["closed", "原站恢复了"]);
   assert.equal(card(elsewhere).state, "open");
@@ -167,14 +214,20 @@ test("a card made after this run was claimed isn't in its scope", () => {
   finish(other.run, other.token, { outcome: "done", notice: [{ title: "后来的", text: "x" }] }, at(2));
   const later = one<{ id: number }>("SELECT id FROM cards")!.id;
   const receipt = finish(job.run, job.token, { outcome: "done", resolve: [{ card: later, reason: "看过了" }] }, at(3));
-  assert.deepEqual(receipt.rejected.map((r) => r.card), [later]);
+  assert.deepEqual(
+    receipt.rejected.map((r) => r.card),
+    [later],
+  );
 });
 
 test("each channel gets each card once, and an update when its state changes; a lost report sends no second message", () => {
   clean();
   const { id } = asked(1);
   const first = nextCard("chat", at(1))!;
-  assert.deepEqual([first.id, first.version, first.ref, first.kind, first.state, first.options, first.recommend], [id, 1, null, "ask", "open", ["删", "留着"], 1]);
+  assert.deepEqual(
+    [first.id, first.version, first.ref, first.kind, first.state, first.options, first.recommend],
+    [id, 1, null, "ask", "open", ["删", "留着"], 1],
+  );
   assert.equal(nextCard("chat", at(1)), null, "out with the channel for a minute");
   // The report was lost: it comes round again under the same message identity.
   const again = nextCard("chat", at(3))!;
@@ -191,7 +244,10 @@ test("each channel gets each card once, and an update when its state changes; a 
   // A late report of the older version changes nothing.
   delivered("chat", id, 2, "om_1", at(12));
   delivered("chat", id, 1, "om_other", at(13));
-  const row = one<{ version: number; ref: string }>("SELECT version, ref FROM deliveries WHERE card_id = ? AND channel = 'chat'", [id])!;
+  const row = one<{ version: number; ref: string }>(
+    "SELECT version, ref FROM deliveries WHERE card_id = ? AND channel = 'chat'",
+    [id],
+  )!;
   assert.deepEqual([row.version, row.ref], [2, "om_1"]);
 });
 
@@ -232,7 +288,10 @@ test("a card solved before it was sent doesn't bother the owner; a closed one al
   delivered("chat", sent, v1.version, "om_2", at(3));
   resolve(sent, "问题自己好了", "owner", at(4));
   const update = nextCard("chat", at(4))!;
-  assert.deepEqual([update.id, update.state, update.ref, update.options, update.result], [sent, "closed", "om_2", ["删", "留着"], "问题自己好了"]);
+  assert.deepEqual(
+    [update.id, update.state, update.ref, update.options, update.result],
+    [sent, "closed", "om_2", ["删", "留着"], "问题自己好了"],
+  );
 });
 
 test("a notice has one button that closes it; something only to know has none and isn't left open", () => {
@@ -260,10 +319,15 @@ test("what only needed saying is told once per key; given up, it can be told aga
   const first = tell("source:app:k", "应用", "周报", at(0));
   assert.equal(first.duplicate, false);
   assert.equal(tell("source:app:k", "应用", "周报", at(1)).duplicate, true);
-  for (const minute of [0, 1, 3, 7, 15, 25, 35, 45, 55]) failed("chat", first.card, nextCard("chat", at(minute))!.version, "挂了", at(minute));
+  for (const minute of [0, 1, 3, 7, 15, 25, 35, 45, 55])
+    failed("chat", first.card, nextCard("chat", at(minute))!.version, "挂了", at(minute));
   assert.equal(nextCard("chat", at(60)), null);
   const again = tell("source:app:k", "应用", "周报（更新）", at(70));
-  assert.deepEqual([again.card, again.duplicate], [first.card, false], "told again, it goes out at once with its new words");
+  assert.deepEqual(
+    [again.card, again.duplicate],
+    [first.card, false],
+    "told again, it goes out at once with its new words",
+  );
   assert.equal(nextCard("chat", at(70))?.text, "周报（更新）");
   assert.equal(nextCard("plain", at(70))?.text, "周报（更新）");
 });

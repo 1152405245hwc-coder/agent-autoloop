@@ -1,18 +1,34 @@
 {
   "name": "agent-hub",
   "version": "0.1.0",
+  "description": "Let Agents follow up on work and ask when they need your judgment.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KKKKhazix/agent-hub.git"
+  },
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24" },
-  "bin": { "agent-hub": "bin/agent-hub.ts" },
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "agent-hub": "bin/agent-hub.ts"
+  },
   "scripts": {
     "test": "node --disable-warning=ExperimentalWarning --test tests/*.test.ts",
     "typecheck": "tsc -p .",
+    "format": "prettier --write \"**/*.{ts,json,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,json,yml}\"",
     "test:nightly": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 sim/*.test.ts && node --disable-warning=ExperimentalWarning scripts/benchmark.ts --check",
     "benchmark": "node --disable-warning=ExperimentalWarning scripts/benchmark.ts --check"
   },
   "devDependencies": {
     "@types/node": "26.6.4",
+    "prettier": "3.9.10",
     "typescript": "7.0.2"
+  },
+  "prettier": {
+    "printWidth": 120
   }
 }

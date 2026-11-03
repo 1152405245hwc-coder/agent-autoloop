@@ -8,17 +8,28 @@ import { test } from "node:test";
 import { at, setup } from "./helpers.ts";
 
 setup("events");
-const { ingest, unrouted } = await import("../src/runtime.ts");
+const { ingest, unrouted } = await import("../host/runtime.ts");
 const { InputError } = await import("../kernel/errors.ts");
 const { all, run } = await import("./storage.ts");
 
-const clean = () => { for (const table of ["run_events", "runs", "events"]) run(`DELETE FROM ${table}`); };
-const good = { id: "feedback:1", type: "feedback.new", subject: "#1", summary: "一句话", detail: "详情", link: "https://x.test/1" };
+const clean = () => {
+  for (const table of ["run_events", "runs", "events"]) run(`DELETE FROM ${table}`);
+};
+const good = {
+  id: "feedback:1",
+  type: "feedback.new",
+  subject: "#1",
+  summary: "一句话",
+  detail: "详情",
+  link: "https://x.test/1",
+};
 
 test("a bad event is refused and nothing is kept", () => {
   clean();
   for (const bad of [
-    null, [], "text",
+    null,
+    [],
+    "text",
     { type: "x.y" },
     { id: "1" },
     { ...good, oops: 1 },
@@ -32,7 +43,8 @@ test("a bad event is refused and nothing is kept", () => {
     { ...good, link: "https://x.test/中文" },
     { ...good, link: "https://x.test/a b" },
     { ...good, summary: 1 },
-  ]) assert.throws(() => ingest("app", bad, at(0)), InputError, JSON.stringify(bad));
+  ])
+    assert.throws(() => ingest("app", bad, at(0)), InputError, JSON.stringify(bad));
   assert.equal(all("SELECT id FROM events").length, 0);
 });
 
@@ -50,13 +62,22 @@ test("the same event sent twice is kept once and makes work once", () => {
 
 test("an event matching two rules makes work for both", () => {
   clean();
-  assert.deepEqual(ingest("ops", { id: "a", type: "alert.raised", subject: "x" }, at(0)).routed, ["告警", "告警也记一笔"]);
-  assert.deepEqual(all<{ rule: string }>("SELECT rule FROM runs ORDER BY id").map((r) => r.rule), ["告警", "告警也记一笔"]);
+  assert.deepEqual(ingest("ops", { id: "a", type: "alert.raised", subject: "x" }, at(0)).routed, [
+    "告警",
+    "告警也记一笔",
+  ]);
+  assert.deepEqual(
+    all<{ rule: string }>("SELECT rule FROM runs ORDER BY id").map((r) => r.rule),
+    ["告警", "告警也记一笔"],
+  );
 });
 
 test("an event no rule matches is kept for the owner to see, and one source doesn't match another's rule", () => {
   clean();
   assert.deepEqual(ingest("ops", { id: "b", type: "feedback.new" }, at(0)).routed, []);
-  assert.deepEqual(unrouted().map((e) => [e.source, e.type]), [["ops", "feedback.new"]]);
+  assert.deepEqual(
+    unrouted().map((e) => [e.source, e.type]),
+    [["ops", "feedback.new"]],
+  );
   assert.equal(all("SELECT id FROM runs").length, 0);
 });

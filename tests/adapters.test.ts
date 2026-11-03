@@ -11,7 +11,15 @@ const claude: Adapter = (await import("../plugins/claude/agent.ts")).default;
 const codex: Adapter = (await import("../plugins/codex/agent.ts")).default;
 const command: Adapter = (await import("../plugins/command/agent.ts")).default;
 
-const turn = { prompt: "做这件事", session: "new-id", resume: null, cwd: "/x", access: "edit" as const, contextFile: "/ctx.json", folder: "/run" };
+const turn = {
+  prompt: "做这件事",
+  session: "new-id",
+  resume: null,
+  cwd: "/x",
+  access: "edit" as const,
+  contextFile: "/ctx.json",
+  folder: "/run",
+};
 const has = (argv: string[], ...parts: string[]) => {
   const at = argv.indexOf(parts[0]);
   return at >= 0 && parts.every((part, i) => argv[at + i] === part);
@@ -19,7 +27,11 @@ const has = (argv: string[], ...parts: string[]) => {
 
 // The program itself is looked up once: these only care about what follows it.
 const stubbed = (adapter: Adapter, t: object) => {
-  try { return adapter.command({ ...turn, ...t }); } catch { return null; }
+  try {
+    return adapter.command({ ...turn, ...t });
+  } catch {
+    return null;
+  }
 };
 
 test("Claude Code: access, new and going on, model", { skip: !stubbed(claude, {}) }, () => {
@@ -39,9 +51,27 @@ test("Claude Code: access, new and going on, model", { skip: !stubbed(claude, {}
 });
 
 test("Claude Code: reading its result", () => {
-  const line = (over: object) => JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "好了", session_id: "s", total_cost_usd: 0.5, usage: { input_tokens: 10, output_tokens: 2, cache_read_input_tokens: 5, cache_creation_input_tokens: 1 }, ...over });
-  assert.deepEqual(claude.read(`noise\n${line({})}\n`, 0, ""), { text: "好了", session: "s", usage: { input: 10, output: 2, cached: 6, cost: 0.5 }, finished: true });
-  assert.match(claude.read(line({ is_error: true, result: "Failed to authenticate\nmore" }), 1, "").error!, /^Failed to authenticate$/);
+  const line = (over: object) =>
+    JSON.stringify({
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      result: "好了",
+      session_id: "s",
+      total_cost_usd: 0.5,
+      usage: { input_tokens: 10, output_tokens: 2, cache_read_input_tokens: 5, cache_creation_input_tokens: 1 },
+      ...over,
+    });
+  assert.deepEqual(claude.read(`noise\n${line({})}\n`, 0, ""), {
+    text: "好了",
+    session: "s",
+    usage: { input: 10, output: 2, cached: 6, cost: 0.5 },
+    finished: true,
+  });
+  assert.match(
+    claude.read(line({ is_error: true, result: "Failed to authenticate\nmore" }), 1, "").error!,
+    /^Failed to authenticate$/,
+  );
   assert.equal(claude.read(line({ is_error: true, result: "x" }), 1, "").session, "s");
   assert.equal(claude.read(line({ subtype: "error_max_turns", result: undefined }), 1, "").error, "error_max_turns");
   assert.deepEqual(claude.read("", null, ""), {}, "still going");
@@ -71,17 +101,38 @@ test("Codex: only a finished turn's last message is its answer", () => {
   const warning = { type: "item.completed", item: { type: "error", message: "under development" } };
   const said = (text: string) => ({ type: "item.completed", item: { type: "agent_message", text } });
   const ended = { type: "turn.completed", usage: { input_tokens: 9, cached_input_tokens: 3, output_tokens: 1 } };
-  assert.deepEqual(codex.read(lines(started, warning, said("中途"), said("好了"), ended), 0, ""), { session: "t", text: "好了", finished: true, usage: { input: 9, output: 1, cached: 3 } });
-  assert.deepEqual(codex.read(lines(started, said("中途")), null, ""), { session: "t" }, "still going: only the session so far");
+  assert.deepEqual(codex.read(lines(started, warning, said("中途"), said("好了"), ended), 0, ""), {
+    session: "t",
+    text: "好了",
+    finished: true,
+    usage: { input: 9, output: 1, cached: 3 },
+  });
+  assert.deepEqual(
+    codex.read(lines(started, said("中途")), null, ""),
+    { session: "t" },
+    "still going: only the session so far",
+  );
   assert.equal(codex.read(lines(started, said("中途")), 1, "").error, "Codex 没有完成并留下实际结果");
-  assert.equal(codex.read(lines(started, ended), 0, "").error, "Codex 没有完成并留下实际结果", "finished with nothing to say");
-  assert.deepEqual(codex.read(lines(started, { type: "turn.failed", error: { message: "额度用完了" } }), 1, ""), { session: "t", finished: true, error: "额度用完了" });
+  assert.equal(
+    codex.read(lines(started, ended), 0, "").error,
+    "Codex 没有完成并留下实际结果",
+    "finished with nothing to say",
+  );
+  assert.deepEqual(codex.read(lines(started, { type: "turn.failed", error: { message: "额度用完了" } }), 1, ""), {
+    session: "t",
+    finished: true,
+    error: "额度用完了",
+  });
   assert.equal(codex.read("", 1, "cannot resume: active writer").error, "cannot resume: active writer");
   assert.equal(codex.link!("t"), "codex://threads/t");
 });
 
 test("a plain command: placeholders filled in, stdout is its last message, a bad exit code is a failure", () => {
-  const argv = command.command({ ...turn, model: "m", command: ["tool", "--model={model}", "-p", "{prompt}", "--ctx", "{context}"] });
+  const argv = command.command({
+    ...turn,
+    model: "m",
+    command: ["tool", "--model={model}", "-p", "{prompt}", "--ctx", "{context}"],
+  });
   assert.deepEqual(argv, ["tool", "--model=m", "-p", "做这件事", "--ctx", "/ctx.json"]);
   assert.deepEqual(command.read("好了\n", 0, ""), { text: "好了\n" });
   assert.deepEqual(command.read("中途", null, ""), {});

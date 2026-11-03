@@ -1,5 +1,5 @@
-// What this machine is in the system: config.json, private to its owner. On a machine that runs everything it has all of
-// these; a machine that only does work has the hub's address and a worker's key.
+// What this machine is in the system: config.json, private to its owner. On a machine that runs everything it has all
+// of these; a machine that only does work has the hub's address and a worker's key.
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { HOME } from "./home.ts";

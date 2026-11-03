@@ -10,7 +10,11 @@ export class HubError extends Error {
 
 export function hubClient(url: string, key: string) {
   const base = url.replace(/\/$/, "");
-  async function call(method: string, path: string, { token = key, body, timeout = 30 }: { token?: string; body?: unknown; timeout?: number } = {}) {
+  async function call(
+    method: string,
+    path: string,
+    { token = key, body, timeout = 30 }: { token?: string; body?: unknown; timeout?: number } = {},
+  ) {
     const response = await fetch(base + path, {
       method,
       headers: { authorization: `Bearer ${token}`, ...(body !== undefined && { "content-type": "application/json" }) },
@@ -19,26 +23,35 @@ export function hubClient(url: string, key: string) {
     });
     const text = await response.text();
     let data: any = null;
-    try { data = text ? JSON.parse(text) : null; } catch {}
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {}
     if (!response.ok) throw new HubError(response.status, data?.error ?? `中台返回 ${response.status}`);
     return data;
   }
   return {
     // The worker's door.
-    work: (query: { claim: string; wait: number; running: number[]; capacity: boolean }) =>
-      call("GET", `/v1/work?${new URLSearchParams({ claim: query.claim, wait: String(query.wait), running: query.running.join(","), capacity: query.capacity ? "1" : "0" })}`, { timeout: query.wait + 30 }),
-    started: (run: number, token: string, body: { session?: string; link?: string }) => call("POST", `/v1/runs/${run}/started`, { token, body }),
+    work({ claim, wait, running, capacity }: { claim: string; wait: number; running: number[]; capacity: boolean }) {
+      const query = { claim, wait: String(wait), running: running.join(","), capacity: capacity ? "1" : "0" };
+      return call("GET", `/v1/work?${new URLSearchParams(query)}`, { timeout: wait + 30 });
+    },
+    started: (run: number, token: string, body: { session?: string; link?: string }) =>
+      call("POST", `/v1/runs/${run}/started`, { token, body }),
     result: (run: number, token: string, body: unknown) => call("POST", `/v1/runs/${run}/result`, { token, body }),
     // The channel's door.
     nextCard: (wait: number) => call("GET", `/v1/cards/next?wait=${wait}`, { timeout: wait + 30 }),
-    delivered: (card: number, version: number, ref: string | null) => call("POST", `/v1/cards/${card}/delivered`, { body: { version, ref } }),
-    failed: (card: number, version: number, error: string) => call("POST", `/v1/cards/${card}/failed`, { body: { version, error } }),
-    answer: (card: number, body: { choice?: number; text?: string; by?: string; ref?: string }) => call("POST", `/v1/cards/${card}/answer`, { body }),
+    delivered: (card: number, version: number, ref: string | null) =>
+      call("POST", `/v1/cards/${card}/delivered`, { body: { version, ref } }),
+    failed: (card: number, version: number, error: string) =>
+      call("POST", `/v1/cards/${card}/failed`, { body: { version, error } }),
+    answer: (card: number, body: { choice?: number; text?: string; by?: string; ref?: string }) =>
+      call("POST", `/v1/cards/${card}/answer`, { body }),
     // Sources, the owner and tasks elsewhere.
     event: (body: unknown) => call("POST", "/v1/events", { body }),
     tell: (body: unknown) => call("POST", "/v1/tell", { body }),
     why: (id: number) => call("GET", `/v1/runs/${id}/why`),
-    removeKey:(kind:string,name:string)=>call("DELETE",`/v1/keys/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`),
+    removeKey: (kind: string, name: string) =>
+      call("DELETE", `/v1/keys/${encodeURIComponent(kind)}/${encodeURIComponent(name)}`),
     state: () => call("GET", "/v1/state"),
     cancel: (run: number) => call("POST", `/v1/runs/${run}/cancel`, { body: {} }),
     resolve: (card: number, reason: string) => call("POST", `/v1/cards/${card}/resolve`, { body: { reason } }),

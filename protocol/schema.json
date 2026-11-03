@@ -15,32 +15,20 @@
           "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
         },
         "subject": {
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": ["string", "null"],
           "maxLength": 100,
           "pattern": "^[A-Za-z0-9#._:\\/@-]*$"
         },
         "summary": {
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": ["string", "null"],
           "maxLength": 200
         },
         "detail": {
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": ["string", "null"],
           "maxLength": 4000
         },
         "link": {
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": ["string", "null"],
           "maxLength": 500,
           "pattern": "^(https?://[\\x21-\\x7e]+)?$"
         },
@@ -50,10 +38,7 @@
           "maximum": 9007199254740991
         }
       },
-      "required": [
-        "id",
-        "type"
-      ],
+      "required": ["id", "type"],
       "additionalProperties": false
     },
     "usage": {
@@ -103,11 +88,7 @@
           "maxLength": 100
         }
       },
-      "required": [
-        "title",
-        "text",
-        "options"
-      ],
+      "required": ["title", "text", "options"],
       "additionalProperties": false,
       "oneOf": [
         {
@@ -184,10 +165,7 @@
           "maxLength": 100
         }
       },
-      "required": [
-        "title",
-        "text"
-      ],
+      "required": ["title", "text"],
       "additionalProperties": false
     },
     "resolve": {
@@ -204,10 +182,7 @@
           "pattern": "\\S"
         }
       },
-      "required": [
-        "card",
-        "reason"
-      ],
+      "required": ["card", "reason"],
       "additionalProperties": false
     },
     "later": {
@@ -226,10 +201,7 @@
             },
             "about": {}
           },
-          "required": [
-            "key",
-            "cancel"
-          ],
+          "required": ["key", "cancel"],
           "additionalProperties": false
         },
         {
@@ -253,11 +225,7 @@
               "pattern": "\\S"
             }
           },
-          "required": [
-            "key",
-            "at",
-            "about"
-          ],
+          "required": ["key", "at", "about"],
           "additionalProperties": false
         }
       ]
@@ -266,12 +234,7 @@
       "type": "object",
       "properties": {
         "outcome": {
-          "enum": [
-            "done",
-            "nothing",
-            "failed",
-            "cancelled"
-          ]
+          "enum": ["done", "nothing", "failed", "cancelled"]
         },
         "summary": {
           "type": "string",
@@ -324,9 +287,7 @@
           "maxItems": 100
         }
       },
-      "required": [
-        "outcome"
-      ],
+      "required": ["outcome"],
       "additionalProperties": false
     },
     "started": {
@@ -375,15 +336,10 @@
           "minimum": 1
         },
         "ref": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       },
-      "required": [
-        "version"
-      ],
+      "required": ["version"],
       "additionalProperties": false
     },
     "failed": {
@@ -398,10 +354,7 @@
           "maxLength": 300
         }
       },
-      "required": [
-        "version",
-        "error"
-      ],
+      "required": ["version", "error"],
       "additionalProperties": false
     },
     "tell-source": {
@@ -418,10 +371,7 @@
           "pattern": "\\S"
         }
       },
-      "required": [
-        "key",
-        "text"
-      ],
+      "required": ["key", "text"],
       "additionalProperties": false
     },
     "tell-worker": {
@@ -444,11 +394,7 @@
           "pattern": "\\S"
         }
       },
-      "required": [
-        "key",
-        "text",
-        "task"
-      ],
+      "required": ["key", "text", "task"],
       "additionalProperties": false
     },
     "job": {
@@ -492,17 +438,11 @@
                   }
                 }
               },
-              "required": [
-                "source",
-                "types"
-              ],
+              "required": ["source", "types"],
               "additionalProperties": true
             }
           },
-          "required": [
-            "name",
-            "cwd"
-          ],
+          "required": ["name", "cwd"],
           "additionalProperties": true
         },
         "agent": {
@@ -527,11 +467,7 @@
               "type": "string"
             },
             "access": {
-              "enum": [
-                "read",
-                "edit",
-                "full"
-              ]
+              "enum": ["read", "edit", "full"]
             },
             "command": {
               "type": "array",
@@ -544,12 +480,7 @@
               "minimum": 1
             }
           },
-          "required": [
-            "id",
-            "name",
-            "use",
-            "access"
-          ],
+          "required": ["id", "name", "use", "access"],
           "additionalProperties": true
         },
         "context": {
@@ -592,21 +523,11 @@
               }
             }
           },
-          "required": [
-            "events",
-            "answers",
-            "timers",
-            "waiting",
-            "open",
-            "decided"
-          ],
+          "required": ["events", "answers", "timers", "waiting", "open", "decided"],
           "additionalProperties": true
         },
         "session": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "attempt": {
           "type": "integer",
@@ -619,16 +540,7 @@
           }
         }
       },
-      "required": [
-        "run",
-        "token",
-        "attempt",
-        "rule",
-        "agent",
-        "session",
-        "askFirst",
-        "context"
-      ],
+      "required": ["run", "token", "attempt", "rule", "agent", "session", "askFirst", "context"],
       "additionalProperties": true
     },
     "card": {
@@ -643,18 +555,10 @@
           "minimum": 1
         },
         "kind": {
-          "enum": [
-            "ask",
-            "notice"
-          ]
+          "enum": ["ask", "notice"]
         },
         "state": {
-          "enum": [
-            "open",
-            "decided",
-            "done",
-            "closed"
-          ]
+          "enum": ["open", "decided", "done", "closed"]
         },
         "title": {
           "type": "string"
@@ -669,48 +573,27 @@
           }
         },
         "ref": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "recommend": {
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "minimum": 0
         },
         "choice": {
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "minimum": 0
         },
         "answer": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "by": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "result": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "link": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       },
       "required": [
@@ -773,10 +656,7 @@
           }
         }
       },
-      "required": [
-        "job",
-        "cancel"
-      ],
+      "required": ["job", "cancel"],
       "additionalProperties": false
     },
     "eventAck": {
@@ -797,11 +677,7 @@
           }
         }
       },
-      "required": [
-        "event",
-        "duplicate",
-        "routed"
-      ],
+      "required": ["event", "duplicate", "routed"],
       "additionalProperties": false
     },
     "receiptAck": {
@@ -825,9 +701,7 @@
                 "maxLength": 1000
               }
             },
-            "required": [
-              "reason"
-            ],
+            "required": ["reason"],
             "additionalProperties": false
           }
         },
@@ -835,9 +709,7 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "rejected"
-      ],
+      "required": ["rejected"],
       "additionalProperties": false
     },
     "fact": {
@@ -871,28 +743,15 @@
                 "maxLength": 500
               },
               "row": {
-                "type": [
-                  "object",
-                  "null"
-                ]
+                "type": ["object", "null"]
               }
             },
-            "required": [
-              "table",
-              "key",
-              "row"
-            ],
+            "required": ["table", "key", "row"],
             "additionalProperties": false
           }
         }
       },
-      "required": [
-        "version",
-        "seq",
-        "at",
-        "type",
-        "changes"
-      ],
+      "required": ["version", "seq", "at", "type", "changes"],
       "additionalProperties": false
     },
     "error": {
@@ -903,9 +762,7 @@
           "maxLength": 4000
         }
       },
-      "required": [
-        "error"
-      ],
+      "required": ["error"],
       "additionalProperties": false
     },
     "context-event": {
@@ -944,17 +801,7 @@
           "maximum": 9007199254740991
         }
       },
-      "required": [
-        "id",
-        "source",
-        "sourceName",
-        "type",
-        "subject",
-        "summary",
-        "detail",
-        "link",
-        "receivedAt"
-      ],
+      "required": ["id", "source", "sourceName", "type", "subject", "summary", "detail", "link", "receivedAt"],
       "additionalProperties": true
     },
     "context-answer": {
@@ -974,41 +821,23 @@
           }
         },
         "choice": {
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "minimum": 0
         },
         "text": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "about": {
           "type": "string"
         },
         "by": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "at": {
           "type": "string"
         }
       },
-      "required": [
-        "card",
-        "title",
-        "options",
-        "choice",
-        "text",
-        "about",
-        "by",
-        "at"
-      ],
+      "required": ["card", "title", "options", "choice", "text", "about", "by", "at"],
       "additionalProperties": true
     },
     "context-timer": {
@@ -1024,11 +853,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "key",
-        "about",
-        "at"
-      ],
+      "required": ["key", "about", "at"],
       "additionalProperties": true
     },
     "context-open": {
@@ -1048,12 +873,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "card",
-        "title",
-        "text",
-        "at"
-      ],
+      "required": ["card", "title", "text", "at"],
       "additionalProperties": true
     },
     "context-decided": {
@@ -1067,21 +887,13 @@
           "type": "string"
         },
         "choice": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "at": {
           "type": "string"
         }
       },
-      "required": [
-        "card",
-        "title",
-        "choice",
-        "at"
-      ],
+      "required": ["card", "title", "choice", "at"],
       "additionalProperties": true
     }
   }

@@ -1,16 +1,29 @@
-// The worker: on a machine that nothing can reach, it keeps coming to the hub for work and starts an agent for each job. An
-// agent runs detached, in its own process group, writing to files, so the worker can stop and come back and find it still
-// going, or finished. A job is saved before anything slow happens; a result is saved before it's handed in and stays until
-// the hub has taken it.
+// The worker: on a machine that nothing can reach, it keeps coming to the hub for work and starts an agent for each
+// job. An agent runs detached, in its own process group, writing to files, so the worker can stop and come back and
+// find it still going, or finished. A job is saved before anything slow happens; a result is saved before it's handed
+// in and stays until the hub has taken it.
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readSync,
+  renameSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { HubError, type Hub } from "../src/client.ts";
-import { HOME } from "../src/home.ts";
+import { HubError, type Hub } from "../protocol/client.ts";
+import { HOME } from "../host/home.ts";
 import type { Job } from "../protocol/job.ts";
-import type { Notice, Result } from "../src/protocol.ts";
+import type { Notice, Result } from "../protocol/validate.ts";
 import { adapterFor, type Adapter, type Reading, type Turn, type Usage } from "./agents.ts";
 import { promptFor, readMessage, repairPrompt, resultFrom } from "./contract.ts";
 
@@ -27,28 +40,48 @@ const PAUSE = 30_000;
 const UNREACHABLE = 10 * 60_000;
 const TELL_TRIES = 5;
 /** Enough of a long output to find what's at either end of it, while it runs. */
-const HEAD = 64 * 1024, TAIL = 1024 * 1024;
+const HEAD = 64 * 1024;
+const TAIL = 1024 * 1024;
 
 type Entry = {
-  run: number; token: string; attempt: number; job: Job; dir: string; prompt: string;
-  turn: number; session: string; resume: string | null; repairs: number; triedFresh: boolean; usage?: Usage;
-  pid?: number; launchedAt?: number; finishedAt?: number; told?: string; stopping?: number; why?: "cancel" | "timeout";
+  run: number;
+  token: string;
+  attempt: number;
+  job: Job;
+  dir: string;
+  prompt: string;
+  turn: number;
+  session: string;
+  resume: string | null;
+  repairs: number;
+  triedFresh: boolean;
+  usage?: Usage;
+  pid?: number;
+  launchedAt?: number;
+  finishedAt?: number;
+  told?: string;
+  stopping?: number;
+  why?: "cancel" | "timeout";
   result?: Result;
 };
 export type WorkerHub = Pick<Hub, "work" | "started" | "result">;
 export type WorkerOptions = {
-  hub: WorkerHub; name: string; capacity?: number; log?: (line: string) => void;
+  hub: WorkerHub;
+  name: string;
+  capacity?: number;
+  log?: (line: string) => void;
   /** Run when the hub can't be reached for ten minutes, with {text} in it: nothing else can tell the owner then. */
   unreachable?: string[];
   wait?: number;
   now?: () => number;
 };
 
-const add = (a: Usage | undefined, b: Usage | undefined): Usage | undefined => {
-  if (!b) return a;
-  if (!a) return b;
-  return { input: (a.input ?? 0) + (b.input ?? 0), output: (a.output ?? 0) + (b.output ?? 0), cached: (a.cached ?? 0) + (b.cached ?? 0), cost: (a.cost ?? 0) + (b.cost ?? 0) };
-};
+function addUsage(total: Usage | undefined, more: Usage | undefined): Usage | undefined {
+  if (!more) return total;
+  if (!total) return more;
+  const sum = (field: keyof Usage) => (total[field] ?? 0) + (more[field] ?? 0);
+  return { input: sum("input"), output: sum("output"), cached: sum("cached"), cost: sum("cost") };
+}
 
 function save(entry: Entry) {
   const file = path.join(entry.dir, "entry.json");
@@ -63,18 +96,26 @@ function agentEnvironment(entry: Entry) {
     if (/^(AGENT_HUB_|CLAUDECODE$|CLAUDE_CODE_|CODEX_(?!HOME$))/.test(name)) continue;
     env[name] = value;
   }
-  return { ...env, AGENT_HUB_HOME: HOME, AGENT_HUB_RUN: String(entry.run), AGENT_HUB_CONTEXT: path.join(entry.dir, "context.json") };
+  return {
+    ...env,
+    AGENT_HUB_HOME: HOME,
+    AGENT_HUB_RUN: String(entry.run),
+    AGENT_HUB_CONTEXT: path.join(entry.dir, "context.json"),
+  };
 }
 
 const files = (entry: Entry) => ({
-  out: path.join(entry.dir, `stdout-${entry.turn}.log`), err: path.join(entry.dir, `stderr-${entry.turn}.log`), exit: path.join(entry.dir, `exit-${entry.turn}`),
+  out: path.join(entry.dir, `stdout-${entry.turn}.log`),
+  err: path.join(entry.dir, `stderr-${entry.turn}.log`),
+  exit: path.join(entry.dir, `exit-${entry.turn}`),
 });
 const marker = (entry: Entry) => `agent-hub-run:${entry.run}:${entry.attempt}:${entry.turn}`;
 
 function alive(entry: Entry) {
   if (!entry.pid) return false;
   try {
-    return execFileSync("ps", ["-p", String(entry.pid), "-o", "command="], { encoding: "utf8" }).includes(marker(entry));
+    const command = execFileSync("ps", ["-p", String(entry.pid), "-o", "command="], { encoding: "utf8" });
+    return command.includes(marker(entry));
   } catch {
     return false;
   }
@@ -92,7 +133,8 @@ function snapshot(file: string) {
   if (size <= HEAD + TAIL) return readFileSync(file, "utf8");
   const fd = openSync(file, "r");
   try {
-    const head = Buffer.alloc(HEAD), end = Buffer.alloc(TAIL);
+    const head = Buffer.alloc(HEAD);
+    const end = Buffer.alloc(TAIL);
     readSync(fd, head, 0, HEAD, 0);
     readSync(fd, end, 0, TAIL, size - TAIL);
     return `${head.toString("utf8")}\n${end.toString("utf8")}`;
@@ -101,20 +143,31 @@ function snapshot(file: string) {
   }
 }
 
-export function createWorker({ hub, name, capacity = 2, log = () => {}, unreachable, wait = WAIT, now = Date.now }: WorkerOptions) {
+export function createWorker({
+  hub,
+  name,
+  capacity = 2,
+  log = () => {},
+  unreachable,
+  wait = WAIT,
+  now = Date.now,
+}: WorkerOptions) {
   let claim = randomUUID();
-  let unreachableSince: number | null = null, told = false, tries = 0;
+  let unreachableSince: number | null = null;
+  let told = false;
+  let tries = 0;
   mkdirSync(RUNS, { recursive: true, mode: 0o700 });
 
-  const entries = () => readdirSync(RUNS).flatMap((id) => {
-    try {
-      return [JSON.parse(readFileSync(path.join(RUNS, id, "entry.json"), "utf8")) as Entry];
-    } catch {
-      return [];
-    }
-  });
+  const entries = () =>
+    readdirSync(RUNS).flatMap((id) => {
+      try {
+        return [JSON.parse(readFileSync(path.join(RUNS, id, "entry.json"), "utf8")) as Entry];
+      } catch {
+        return [];
+      }
+    });
 
-  /** Starts a turn of the agent: a process of its own that outlives this one, leaving its output and exit code in files. */
+  /** Starts a turn of the agent: a process that outlives this one, leaving its output and exit code in files. */
   function launch(entry: Entry, adapter: Adapter, prompt: string) {
     entry.turn += 1;
     entry.launchedAt = now();
@@ -124,8 +177,16 @@ export function createWorker({ hub, name, capacity = 2, log = () => {}, unreacha
     const { rule, agent } = entry.job;
     const cwd = rule.cwd.replace(/^~(?=\/)/, homedir());
     const turn: Turn = {
-      prompt, session: entry.session, resume: entry.resume, cwd, model: agent.model, effort: agent.effort, access: agent.access as Turn["access"],
-      command: agent.command, contextFile: path.join(entry.dir, "context.json"), folder: entry.dir,
+      prompt,
+      session: entry.session,
+      resume: entry.resume,
+      cwd,
+      model: agent.model,
+      effort: agent.effort,
+      access: agent.access as Turn["access"],
+      command: agent.command,
+      contextFile: path.join(entry.dir, "context.json"),
+      folder: entry.dir,
     };
     if (!existsSync(cwd)) throw new Error(`在 ${cwd} 启动不了：这个目录不存在`);
     const argv = adapter.command(turn);
@@ -134,7 +195,12 @@ export function createWorker({ hub, name, capacity = 2, log = () => {}, unreacha
     const script = `"$@" >"${out}" 2>"${err}"; echo $? >"${exit}.tmp"; mv "${exit}.tmp" "${exit}"`;
     // The login shell gives it the PATH and sign-in its owner has in a terminal; launchd and systemd give neither.
     const login = [process.env.SHELL ?? "/bin/sh", "-lc", 'exec "$0" "$@"'];
-    const child = spawn("/bin/sh", ["-c", script, marker(entry), ...login, ...argv], { cwd, env: agentEnvironment(entry), detached: true, stdio: "ignore" });
+    const child = spawn("/bin/sh", ["-c", script, marker(entry), ...login, ...argv], {
+      cwd,
+      env: agentEnvironment(entry),
+      detached: true,
+      stdio: "ignore",
+    });
     child.on("error", (error) => log(`run ${entry.run}: ${error}`));
     child.unref();
     entry.pid = child.pid;
@@ -151,8 +217,17 @@ export function createWorker({ hub, name, capacity = 2, log = () => {}, unreacha
     const dir = path.join(RUNS, `${job.run}-${job.attempt}`);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     const entry: Entry = {
-      run: job.run, token: job.token, attempt: job.attempt, job, dir, prompt: "",
-      turn: 0, session: job.session ?? randomUUID(), resume: job.session, repairs: 0, triedFresh: false,
+      run: job.run,
+      token: job.token,
+      attempt: job.attempt,
+      job,
+      dir,
+      prompt: "",
+      turn: 0,
+      session: job.session ?? randomUUID(),
+      resume: job.session,
+      repairs: 0,
+      triedFresh: false,
     };
     // Kept before anything slow: a worker stopped from here on still has the job.
     save(entry);
@@ -176,11 +251,16 @@ export function createWorker({ hub, name, capacity = 2, log = () => {}, unreacha
   function conclude(entry: Entry, adapter: Adapter, code: number | null) {
     // One ended because its turn was over but it wouldn't exit said what it had to say first.
     const seen = read(entry, adapter, entry.finishedAt ? 0 : code);
-    entry.usage = add(entry.usage, seen.usage);
+    entry.usage = addUsage(entry.usage, seen.usage);
     const session = seen.session ?? (entry.turn > 0 && adapter.link ? entry.session : undefined);
     if (seen.session) entry.session = seen.session;
-    if (entry.why === "cancel") return endWith(entry, { outcome: "cancelled", summary: "已停止", ...(session && { session }), ...(entry.usage && { usage: entry.usage }) });
-    if (entry.why === "timeout") return endWith(entry, { outcome: "failed", error: `超过 ${entry.job.agent.timeout ?? TIMEOUT_MINUTES} 分钟还没结束，已停止`, ...(session && { session }) });
+    const usage = entry.usage && { usage: entry.usage };
+    const known = session && { session };
+    if (entry.why === "cancel") return endWith(entry, { outcome: "cancelled", summary: "已停止", ...known, ...usage });
+    if (entry.why === "timeout") {
+      const minutes = entry.job.agent.timeout ?? TIMEOUT_MINUTES;
+      return endWith(entry, { outcome: "failed", error: `超过 ${minutes} 分钟还没结束，已停止`, ...known });
+    }
     if (seen.error !== undefined || seen.text === undefined) {
       const error = seen.error || "没留下结果";
       // The conversation may not be there to go on in, or something else has it open: this go carries on in a new one.
@@ -196,7 +276,7 @@ export function createWorker({ hub, name, capacity = 2, log = () => {}, unreacha
           return endWith(entry, { outcome: "failed", error: String(failure).slice(0, 500) });
         }
       }
-      return endWith(entry, { outcome: "failed", error: error.slice(0, 500), ...(session && { session }), ...(entry.usage && { usage: entry.usage }) });
+      return endWith(entry, { outcome: "failed", error: error.slice(0, 500), ...known, ...usage });
     }
     const { result, problem } = resultFrom(readMessage(seen.text), { session, usage: entry.usage });
     if (!problem) return endWith(entry, result);
@@ -210,7 +290,10 @@ export function createWorker({ hub, name, capacity = 2, log = () => {}, unreacha
         return;
       } catch {}
     }
-    const notice: Notice = { title: `「${entry.job.rule.name}」的回执读不懂`, text: `这一轮按第一行算结束了，但它要中台做的事没有生效（${problem}）。原文在 ${files(entry).out}。` };
+    const notice: Notice = {
+      title: `「${entry.job.rule.name}」的回执读不懂`,
+      text: `这一轮按第一行算结束了，但它要中台做的事没有生效（${problem}）。原文在 ${files(entry).out}。`,
+    };
     endWith(entry, { ...result, notice: [...(result.notice ?? []), notice] });
   }
 
@@ -227,7 +310,9 @@ export function createWorker({ hub, name, capacity = 2, log = () => {}, unreacha
       // The worker stopped while starting it, before anything was launched.
       if (!entry.prompt) entry.prompt = promptFor(entry.job, path.join(entry.dir, "context.json"));
       try {
-        writeFileSync(path.join(entry.dir, "context.json"), JSON.stringify(entry.job.context, null, 2), { mode: 0o600 });
+        writeFileSync(path.join(entry.dir, "context.json"), JSON.stringify(entry.job.context, null, 2), {
+          mode: 0o600,
+        });
         return launch(entry, adapter, entry.prompt);
       } catch (error) {
         return endWith(entry, { outcome: "failed", error: String((error as Error).message ?? error).slice(0, 500) });
@@ -236,9 +321,11 @@ export function createWorker({ hub, name, capacity = 2, log = () => {}, unreacha
     const { exit } = files(entry);
     if (existsSync(exit)) return conclude(entry, adapter, Number(readFileSync(exit, "utf8").trim()));
     // The shell can publish its exit between the first file check and ps returning.
-    if (!alive(entry)) return conclude(entry, adapter, existsSync(exit) ? Number(readFileSync(exit, "utf8").trim()) : null);
+    if (!alive(entry)) {
+      return conclude(entry, adapter, existsSync(exit) ? Number(readFileSync(exit, "utf8").trim()) : null);
+    }
     const seen = read(entry, adapter, null);
-    const session = seen.session ?? (adapter.link ? entry.resume ?? entry.session : undefined);
+    const session = seen.session ?? (adapter.link ? (entry.resume ?? entry.session) : undefined);
     if (session && session !== entry.told) {
       try {
         await hub.started(entry.run, entry.token, { session, ...(adapter.link && { link: adapter.link(session) }) });
@@ -276,7 +363,7 @@ export function createWorker({ hub, name, capacity = 2, log = () => {}, unreacha
     log(`run ${entry.run}: stopping (${why})`);
   }
 
-  /** Hands in what has ended. One the hub can't take now waits for next time; one it refuses is dropped, and said so. */
+  /** Hands in what has ended. One the hub can't take now waits for next time; one it refuses is dropped and said so. */
   async function settle(entry: Entry) {
     if (!entry.result) return;
     try {
@@ -284,7 +371,9 @@ export function createWorker({ hub, name, capacity = 2, log = () => {}, unreacha
       for (const item of answer?.rejected ?? []) log(`run ${entry.run}: not applied: ${JSON.stringify(item)}`);
       log(`run ${entry.run}: ${entry.result.outcome}`);
     } catch (error) {
-      if (!(error instanceof HubError) || error.status >= 500) return log(`run ${entry.run}: couldn't hand in the result: ${error}`);
+      if (!(error instanceof HubError) || error.status >= 500) {
+        return log(`run ${entry.run}: couldn't hand in the result: ${error}`);
+      }
       log(`run ${entry.run}: the hub refused its result (${error.status}: ${error.message}); dropped`);
     }
     unlinkSync(path.join(entry.dir, "entry.json"));
@@ -301,9 +390,15 @@ export function createWorker({ hub, name, capacity = 2, log = () => {}, unreacha
     unreachableSince ??= moment;
     if (!unreachable?.length || told || tries >= TELL_TRIES || moment - unreachableSince < UNREACHABLE) return;
     tries += 1;
-    const text = `${name} 连不上中台已经 ${Math.floor((moment - unreachableSince) / 60_000)} 分钟了，派给它的活暂时没人接；它还在一直重试。`;
+    const minutes = Math.floor((moment - unreachableSince) / 60_000);
+    const text = `${name} 连不上中台已经 ${minutes} 分钟了，派给它的活暂时没人接；它还在一直重试。`;
+    const [program, ...args] = unreachable;
     try {
-      execFileSync(unreachable[0], unreachable.slice(1).map((part) => part.replaceAll("{text}", text)), { timeout: 60_000, stdio: "ignore" });
+      execFileSync(
+        program,
+        args.map((part) => part.replaceAll("{text}", text)),
+        { timeout: 60_000, stdio: "ignore" },
+      );
       told = true;
     } catch (error) {
       log(`couldn't tell anyone the hub is gone: ${error}`);
@@ -317,9 +412,14 @@ export function createWorker({ hub, name, capacity = 2, log = () => {}, unreacha
     const held = entries();
     let reachable = true;
     try {
-      const answer = await hub.work({ claim, wait: held.length ? 1 : wait, running: held.map((e) => e.run), capacity: held.length < capacity });
+      const answer = await hub.work({
+        claim,
+        wait: held.length ? 1 : wait,
+        running: held.map((entry) => entry.run),
+        capacity: held.length < capacity,
+      });
       for (const id of answer?.cancel ?? []) {
-        const entry = held.find((e) => e.run === id);
+        const entry = held.find((entry) => entry.run === id);
         if (entry) stop(entry, "cancel");
       }
       if (answer?.job) {
@@ -338,7 +438,8 @@ export function createWorker({ hub, name, capacity = 2, log = () => {}, unreacha
   function tidy(moment = now()) {
     for (const id of readdirSync(RUNS)) {
       const dir = path.join(RUNS, id);
-      if (!existsSync(path.join(dir, "entry.json")) && moment - statSync(dir).mtimeMs > KEEP_DAYS * 24 * 3600_000) rmSync(dir, { recursive: true, force: true });
+      const expired = moment - statSync(dir).mtimeMs > KEEP_DAYS * 24 * 3600_000;
+      if (!existsSync(path.join(dir, "entry.json")) && expired) rmSync(dir, { recursive: true, force: true });
     }
   }
 

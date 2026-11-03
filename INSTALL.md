@@ -38,7 +38,7 @@ agent-hub try
 
 ## 日志与恢复
 
-开发测试用 `npm test`、`npm run typecheck`；完整故障与预算检查用 `npm run test:nightly`。这些命令自己建临时目录和随机端口，不需要装系统服务。检查其他实现时，用 `agent-hub conformance <测试地址> --config <测试凭据文件>`，格式见协议。
+开发测试用 `npm test`、`npm run typecheck`、`npm run format:check`；完整故障与预算检查用 `npm run test:nightly`。这些命令自己建临时目录和随机端口，不需要装系统服务。检查其他实现时，用 `agent-hub conformance <测试地址> --config <测试凭据文件>`，格式见协议。
 
 `kernel/` 不读时钟、不取随机数。`evolve` 更新视图，`commit` 在 WAL + FULL 事务里追加事实，提交后才应答。`agent-hub why 42` 查一轮的事件、规则和回执；`GET /v1/stream?after=42` 供本人客户端按序号续读。备份要一起保留 `hub.db` 和权限为 0600 的 `master.key`；后者推导轮次和卡片链接的 token。普通访问密钥只保存哈希。
 

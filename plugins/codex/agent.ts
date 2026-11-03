@@ -1,31 +1,53 @@
-// Codex: the user's own, installed and signed in by them. A run is a `codex exec` in the background; its thread is kept on
-// disk, so a retry or an answer can go on in it, and the link opens it in the app.
+// Codex: the user's own, installed and signed in by them. A run is a `codex exec` in the background; its thread is kept
+// on disk, so a retry or an answer can go on in it, and the link opens it in the app.
 import { execFileSync } from "node:child_process";
 import { findProgram, tail, type Adapter } from "../../worker/agents.ts";
 
 const SANDBOX = { read: "read-only", edit: "workspace-write", full: "danger-full-access" };
-const IN_THE_APP = ["/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex", "/Applications/Codex.app/Contents/Resources/codex"];
+const IN_THE_APP = [
+  "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+  "/Applications/Codex.app/Contents/Resources/codex",
+];
 
 export default {
   command: (turn) => [
-    findProgram("codex", () => IN_THE_APP), "exec", ...(turn.resume ? ["resume"] : []), "--json", "--skip-git-repo-check",
+    findProgram("codex", () => IN_THE_APP),
+    "exec",
+    ...(turn.resume ? ["resume"] : []),
+    "--json",
+    "--skip-git-repo-check",
     ...(turn.model ? ["-m", turn.model] : []),
     ...(turn.effort ? ["-c", `model_reasoning_effort="${turn.effort}"`] : []),
     // As config, because `codex exec resume` takes no -s.
-    "-c", `sandbox_mode="${SANDBOX[turn.access]}"`, "-c", 'approval_policy="never"',
-    ...(turn.resume ? [turn.resume] : []), turn.prompt,
+    "-c",
+    `sandbox_mode="${SANDBOX[turn.access]}"`,
+    "-c",
+    'approval_policy="never"',
+    ...(turn.resume ? [turn.resume] : []),
+    turn.prompt,
   ],
   read(stdout, code, stderr) {
-    const seen: { text?: string; session?: string; usage?: object; error?: string; finished?: boolean; completed?: boolean } = {};
+    const seen: {
+      text?: string;
+      session?: string;
+      usage?: object;
+      error?: string;
+      finished?: boolean;
+      completed?: boolean;
+    } = {};
     for (const line of stdout.split("\n")) {
       let event: any;
-      try { event = JSON.parse(line); } catch { continue; }
+      try {
+        event = JSON.parse(line);
+      } catch {
+        continue;
+      }
       if (event.type === "thread.started") seen.session = event.thread_id;
       else if (event.type === "item.completed" && event.item?.type === "agent_message") seen.text = event.item.text;
       else if (event.type === "turn.completed") {
         seen.completed = seen.finished = true;
-        const u = event.usage ?? {};
-        seen.usage = { input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cached: u.cached_input_tokens ?? 0 };
+        const { input_tokens = 0, output_tokens = 0, cached_input_tokens = 0 } = event.usage ?? {};
+        seen.usage = { input: input_tokens, output: output_tokens, cached: cached_input_tokens };
       } else if (event.type === "turn.failed") {
         seen.finished = true;
         seen.error = event.error?.message || "Codex 没跑完这一轮";
@@ -41,7 +63,11 @@ export default {
   link: (session) => `codex://threads/${session}`,
   check() {
     try {
-      execFileSync(findProgram("codex", () => IN_THE_APP), ["login", "status"], { encoding: "utf8", timeout: 20_000, stdio: ["ignore", "pipe", "pipe"] });
+      execFileSync(
+        findProgram("codex", () => IN_THE_APP),
+        ["login", "status"],
+        { encoding: "utf8", timeout: 20_000, stdio: ["ignore", "pipe", "pipe"] },
+      );
       return null;
     } catch (error) {
       return `Codex 没有登录或用不了：运行 codex login（${(error as Error).message.split("\n")[0]}）`;

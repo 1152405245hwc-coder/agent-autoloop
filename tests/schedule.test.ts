@@ -13,15 +13,22 @@ const home = setup("schedule");
 const rulesFile = join(home, "rules.json");
 writeFileSync(rulesFile, readFileSync(process.env.AGENT_HUB_RULES!, "utf8"));
 process.env.AGENT_HUB_RULES = rulesFile;
-const { tick } = await import("../src/runtime.ts");
-const { ingest } = await import("../src/runtime.ts");
-const { claimNext, finish, started, heartbeat } = await import("../src/runtime.ts");
+const { tick } = await import("../host/runtime.ts");
+const { ingest } = await import("../host/runtime.ts");
+const { claimNext, finish, started, heartbeat } = await import("../host/runtime.ts");
 const { all, one, run } = await import("./storage.ts");
 
-const clean = () => { for (const table of ["run_events", "runs", "events", "seen", "cards", "deliveries", "timers", "schedules"]) run(`DELETE FROM ${table}`); };
-const ticks = () => all<{ key: string }>("SELECT key FROM events WHERE type = 'schedule.tick' ORDER BY id").map((e) => e.key);
+const clean = () => {
+  for (const table of ["run_events", "runs", "events", "seen", "cards", "deliveries", "timers", "schedules"])
+    run(`DELETE FROM ${table}`);
+};
+const ticks = () =>
+  all<{ key: string }>("SELECT key FROM events WHERE type = 'schedule.tick' ORDER BY id").map((e) => e.key);
 const claim = (worker: string, now: number) => claimNext(worker, `c${Math.random()}`, now);
-const keepWorkersHere = (now: number) => { heartbeat("w1", [], now); heartbeat("w2", [], now); };
+const keepWorkersHere = (now: number) => {
+  heartbeat("w1", [], now);
+  heartbeat("w2", [], now);
+};
 
 test("a schedule fires once when it's due, as an event of its own rule", () => {
   clean();
@@ -36,7 +43,10 @@ test("a schedule fires once when it's due, as an event of its own rule", () => {
   assert.equal(ticks().length, 1);
   const job = claim("w1", at(6))!;
   assert.equal(job.rule.name, "巡检");
-  assert.deepEqual(job.context.events.map((e) => [e.source, e.sourceName, e.type]), [["schedule", "定时", "schedule.tick"]]);
+  assert.deepEqual(
+    job.context.events.map((e) => [e.source, e.sourceName, e.type]),
+    [["schedule", "定时", "schedule.tick"]],
+  );
   assert.deepEqual(JSON.parse(one<{ routed: string }>("SELECT routed FROM events")!.routed), ["巡检"]);
 });
 
@@ -73,7 +83,12 @@ test("a run's look-again fires once at its time, on its thread, in its session, 
   ingest("app", { id: "1", type: "feedback.new", subject: "#1" }, at(0));
   const job = claim("w1", at(0))!;
   started(job.run, job.token, { session: "s-1" }, at(0));
-  finish(job.run, job.token, { outcome: "done", later: [{ key: "recheck", at: new Date(at(60)).toISOString(), about: "看原站恢复了没有" }] }, at(1));
+  finish(
+    job.run,
+    job.token,
+    { outcome: "done", later: [{ key: "recheck", at: new Date(at(60)).toISOString(), about: "看原站恢复了没有" }] },
+    at(1),
+  );
   keepWorkersHere(at(59));
   tick(at(59));
   assert.equal(claim("w1", at(59)), null);
@@ -87,10 +102,25 @@ test("a run's look-again fires once at its time, on its thread, in its session, 
   const next = claim("w1", at(61))!;
   assert.equal(next.rule.name, "意见");
   assert.equal(next.session, "s-1");
-  assert.deepEqual(next.context.events.map((e) => [e.type, e.subject]), [["timer.due", "#1"]]);
-  assert.deepEqual(next.context.timers.map((t) => [t.key, t.about]), [["recheck", "看原站恢复了没有"]]);
-  finish(next.run, next.token, { outcome: "nothing", later: [{ key: "recheck", at: new Date(at(120)).toISOString(), about: "再看一次" }] }, at(62));
-  assert.equal(all("SELECT id FROM timers WHERE event_id IS NULL").length, 1, "the fired one doesn't stop a new one under its key");
+  assert.deepEqual(
+    next.context.events.map((e) => [e.type, e.subject]),
+    [["timer.due", "#1"]],
+  );
+  assert.deepEqual(
+    next.context.timers.map((t) => [t.key, t.about]),
+    [["recheck", "看原站恢复了没有"]],
+  );
+  finish(
+    next.run,
+    next.token,
+    { outcome: "nothing", later: [{ key: "recheck", at: new Date(at(120)).toISOString(), about: "再看一次" }] },
+    at(62),
+  );
+  assert.equal(
+    all("SELECT id FROM timers WHERE event_id IS NULL").length,
+    1,
+    "the fired one doesn't stop a new one under its key",
+  );
 });
 
 test("the same key moves a timer; another thread has its own; a run sees what's waiting and can cancel it", () => {
@@ -104,11 +134,26 @@ test("the same key moves a timer; another thread has its own; a run sees what's 
   };
   end(1, at(0), [{ key: "k", at: new Date(at(100)).toISOString(), about: "第一次" }]);
   const seen = end(1, at(1), [{ key: "k", at: new Date(at(200)).toISOString(), about: "改了" }]);
-  assert.deepEqual(seen.map((t) => [t.key, t.about]), [["k", "第一次"]]);
+  assert.deepEqual(
+    seen.map((t) => [t.key, t.about]),
+    [["k", "第一次"]],
+  );
   end(2, at(2), [{ key: "k", at: new Date(at(300)).toISOString(), about: "别的事项" }]);
-  assert.deepEqual(all<{ lane: string; about: string; at: string }>("SELECT lane, about FROM timers ORDER BY id").map((t) => [t.lane, t.about]), [["#1", "改了"], ["#2", "别的事项"]]);
+  assert.deepEqual(
+    all<{ lane: string; about: string; at: string }>("SELECT lane, about FROM timers ORDER BY id").map((t) => [
+      t.lane,
+      t.about,
+    ]),
+    [
+      ["#1", "改了"],
+      ["#2", "别的事项"],
+    ],
+  );
   end(1, at(3), [{ key: "k", cancel: true }]);
-  assert.deepEqual(all<{ lane: string }>("SELECT lane FROM timers").map((t) => t.lane), ["#2"]);
+  assert.deepEqual(
+    all<{ lane: string }>("SELECT lane FROM timers").map((t) => t.lane),
+    ["#2"],
+  );
 });
 
 test("a bad rules file keeps the hub going, says so once, and the card closes when it's fixed", () => {

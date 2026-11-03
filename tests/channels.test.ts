@@ -14,12 +14,26 @@ import { after, test } from "node:test";
 import feishu, { render } from "../plugins/feishu/channel.ts";
 import webhook from "../plugins/webhook/channel.ts";
 import github from "../plugins/github/source.ts";
-import type { Card } from "../src/channels.ts";
+import type { Card } from "../host/channels.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "agent-hub-channels-"));
 after(() => rmSync(dir, { recursive: true, force: true }));
 
-const base: Card = { id: 5, version: 1, ref: null, kind: "ask", state: "open", title: "要不要删", text: "占了 10 GB", options: ["删", "留着"], recommend: 1, choice: null, answer: null, result: null, link: "https://hub.test/c/x" };
+const base: Card = {
+  id: 5,
+  version: 1,
+  ref: null,
+  kind: "ask",
+  state: "open",
+  title: "要不要删",
+  text: "占了 10 GB",
+  options: ["删", "留着"],
+  recommend: 1,
+  choice: null,
+  answer: null,
+  result: null,
+  link: "https://hub.test/c/x",
+};
 
 test("a card shows its options while it's open, and what became of it after", () => {
   const open = render(base);
@@ -40,7 +54,9 @@ test("feishu: sends once per card, updates in place, reports failure, and only r
   const log = join(dir, "lark.log");
   const lark = join(dir, "lark-cli");
   // A stand-in for lark-cli: records each call; `event consume` prints two clicks and waits to be stopped.
-  writeFileSync(lark, `#!/bin/sh
+  writeFileSync(
+    lark,
+    `#!/bin/sh
 echo "$*" >> "${log}"
 case "$*" in
   *"event consume"*)
@@ -50,10 +66,15 @@ case "$*" in
   *fail-me*) exit 1 ;;
   *) cat > /dev/null; echo '{"ok":true,"data":{"message_id":"om_5"}}' ;;
 esac
-`);
+`,
+  );
   chmodSync(lark, 0o755);
   const stop = new AbortController();
-  const cards: (Card | null)[] = [base, { ...base, version: 2, ref: "om_5", state: "decided", choice: 1 }, { ...base, id: 6, title: "fail-me", ref: null }];
+  const cards: (Card | null)[] = [
+    base,
+    { ...base, version: 2, ref: "om_5", state: "decided", choice: 1 },
+    { ...base, id: 6, title: "fail-me", ref: null },
+  ];
   const calls: unknown[][] = [];
   const hub = {
     async nextCard() {
@@ -62,57 +83,138 @@ esac
       stop.abort();
       return { card: null };
     },
-    async delivered(...args: unknown[]) { calls.push(["delivered", ...args]); return {}; },
-    async failed(...args: unknown[]) { calls.push(["failed", args[0], args[1]]); return {}; },
-    async answer(...args: unknown[]) { calls.push(["answer", ...args]); return { changed: true }; },
+    async delivered(...args: unknown[]) {
+      calls.push(["delivered", ...args]);
+      return {};
+    },
+    async failed(...args: unknown[]) {
+      calls.push(["failed", args[0], args[1]]);
+      return {};
+    },
+    async answer(...args: unknown[]) {
+      calls.push(["answer", ...args]);
+      return { changed: true };
+    },
   };
   // A card that can't be sent: lark-cli is told to fail by the words in it.
-  writeFileSync(lark, readFileSync(lark, "utf8").replace('*fail-me*) exit 1 ;;', '*+messages-send*) body=$(cat); case "$body" in *fail-me*) exit 1 ;; esac; echo \'{"ok":true,"data":{"message_id":"om_5"}}\' ;;'));
+  writeFileSync(
+    lark,
+    readFileSync(lark, "utf8").replace(
+      "*fail-me*) exit 1 ;;",
+      '*+messages-send*) body=$(cat); case "$body" in *fail-me*) exit 1 ;; esac; echo \'{"ok":true,"data":{"message_id":"om_5"}}\' ;;',
+    ),
+  );
   await feishu({ hub: hub as any, options: { user: "ou_me", lark }, log: () => {}, signal: stop.signal });
   const lines = readFileSync(log, "utf8").trim().split("\n");
   const sends = lines.filter((l) => l.includes("+messages-send"));
   assert.ok(sends[0].includes("--idempotency-key agent-hub-card-5"), "the key doesn't change with the version");
   assert.ok(sends[0].includes("--user-id ou_me"));
-  assert.ok(lines.some((l) => l.includes("messages patch --message-id om_5")), "an update changes the message that was sent");
-  assert.deepEqual(calls.find((c) => c[0] === "delivered" && c[2] === 1), ["delivered", 5, 1, "om_5"]);
-  assert.deepEqual(calls.find((c) => c[0] === "delivered" && c[2] === 2), ["delivered", 5, 2, "om_5"]);
-  assert.deepEqual(calls.find((c) => c[0] === "failed"), ["failed", 6, 1]);
-  assert.deepEqual(calls.filter((c) => c[0] === "answer"), [["answer", 5, { choice: 1, by: "ou_me", ref: "om_5" }]]);
+  assert.ok(
+    lines.some((l) => l.includes("messages patch --message-id om_5")),
+    "an update changes the message that was sent",
+  );
+  assert.deepEqual(
+    calls.find((c) => c[0] === "delivered" && c[2] === 1),
+    ["delivered", 5, 1, "om_5"],
+  );
+  assert.deepEqual(
+    calls.find((c) => c[0] === "delivered" && c[2] === 2),
+    ["delivered", 5, 2, "om_5"],
+  );
+  assert.deepEqual(
+    calls.find((c) => c[0] === "failed"),
+    ["failed", 6, 1],
+  );
+  assert.deepEqual(
+    calls.filter((c) => c[0] === "answer"),
+    [["answer", 5, { choice: 1, by: "ou_me", ref: "om_5" }]],
+  );
 });
 
 test("a webhook channel posts words and the link once, and has nothing to do for an update", async () => {
   const seen: any[] = [];
   const target = createServer((req, res) => {
     let text = "";
-    req.on("data", (c) => { text += c; });
-    req.on("end", () => { seen.push(JSON.parse(text)); res.statusCode = seen.length === 2 ? 500 : 200; res.end(); });
+    req.on("data", (c) => {
+      text += c;
+    });
+    req.on("end", () => {
+      seen.push(JSON.parse(text));
+      res.statusCode = seen.length === 2 ? 500 : 200;
+      res.end();
+    });
   });
   await new Promise<void>((resolve) => target.listen(0, "127.0.0.1", resolve));
   const stop = new AbortController();
   const cards: Card[] = [base, { ...base, version: 2, ref: "sent-5", state: "decided", choice: 0 }, { ...base, id: 7 }];
   const calls: unknown[][] = [];
   const hub = {
-    async nextCard() { if (cards.length) return { card: cards.shift()! }; stop.abort(); return { card: null }; },
-    async delivered(...args: unknown[]) { calls.push(["delivered", ...args]); return {}; },
-    async failed(...args: unknown[]) { calls.push(["failed", args[0], args[1]]); return {}; },
-    async answer() { return {}; },
+    async nextCard() {
+      if (cards.length) return { card: cards.shift()! };
+      stop.abort();
+      return { card: null };
+    },
+    async delivered(...args: unknown[]) {
+      calls.push(["delivered", ...args]);
+      return {};
+    },
+    async failed(...args: unknown[]) {
+      calls.push(["failed", args[0], args[1]]);
+      return {};
+    },
+    async answer() {
+      return {};
+    },
   };
-  await webhook({ hub: hub as any, options: { url: `http://127.0.0.1:${(target.address() as AddressInfo).port}`, body: { msgtype: "text", text: { content: "{text}" } } }, log: () => {}, signal: stop.signal });
+  await webhook({
+    hub: hub as any,
+    options: {
+      url: `http://127.0.0.1:${(target.address() as AddressInfo).port}`,
+      body: { msgtype: "text", text: { content: "{text}" } },
+    },
+    log: () => {},
+    signal: stop.signal,
+  });
   target.close();
   assert.equal(seen.length, 2);
   assert.match(seen[0].text.content, /要不要删[\s\S]*1\. 删[\s\S]*https:\/\/hub\.test\/c\/x/);
-  assert.deepEqual(calls, [["delivered", 5, 1, "sent-5"], ["delivered", 5, 2, "sent-5"], ["failed", 7, 1]]);
+  assert.deepEqual(calls, [
+    ["delivered", 5, 1, "sent-5"],
+    ["delivered", 5, 2, "sent-5"],
+    ["failed", 7, 1],
+  ]);
 });
 
 test("GitHub: signed or not taken, and what it says becomes a plain event", () => {
   const secret = "s3cret";
-  const body = JSON.stringify({ action: "opened", issue: { number: 12, title: "首页打不开", body: "详情", html_url: "https://github.com/a/b/issues/12" }, repository: { full_name: "a/b", html_url: "https://github.com/a/b" } });
-  const headers = (b: string, over: object = {}) => ({ "x-hub-signature-256": `sha256=${createHmac("sha256", secret).update(b).digest("hex")}`, "x-github-event": "issues", "x-github-delivery": "d-1", ...over });
-  assert.deepEqual(github({ headers: headers(body), body, secret }), [{ id: "d-1", type: "issues.opened", subject: "a/b#12", summary: "首页打不开", detail: "详情", link: "https://github.com/a/b/issues/12" }]);
+  const body = JSON.stringify({
+    action: "opened",
+    issue: { number: 12, title: "首页打不开", body: "详情", html_url: "https://github.com/a/b/issues/12" },
+    repository: { full_name: "a/b", html_url: "https://github.com/a/b" },
+  });
+  const headers = (b: string, over: object = {}) => ({
+    "x-hub-signature-256": `sha256=${createHmac("sha256", secret).update(b).digest("hex")}`,
+    "x-github-event": "issues",
+    "x-github-delivery": "d-1",
+    ...over,
+  });
+  assert.deepEqual(github({ headers: headers(body), body, secret }), [
+    {
+      id: "d-1",
+      type: "issues.opened",
+      subject: "a/b#12",
+      summary: "首页打不开",
+      detail: "详情",
+      link: "https://github.com/a/b/issues/12",
+    },
+  ]);
   assert.throws(() => github({ headers: headers(body, { "x-hub-signature-256": "sha256=00" }), body, secret }));
   assert.throws(() => github({ headers: { "x-github-event": "issues" }, body, secret }));
   assert.throws(() => github({ headers: headers(body), body, secret: "" }), "no secret set up takes nothing");
   assert.deepEqual(github({ headers: headers("{}", { "x-github-event": "ping" }), body: "{}", secret }), []);
   const odd = JSON.stringify({ repository: { full_name: "a/b c" } });
-  assert.match((github({ headers: headers(odd, { "x-github-event": "push" }), body: odd, secret }) as any)[0].subject, /^a\/b-c$/);
+  assert.match(
+    (github({ headers: headers(odd, { "x-github-event": "push" }), body: odd, secret }) as any)[0].subject,
+    /^a\/b-c$/,
+  );
 });

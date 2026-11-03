@@ -13,17 +13,21 @@ import { test } from "node:test";
 import { setup } from "./helpers.ts";
 
 const home = setup("rules");
-const { parseRules, RulesError, rules, ruleNamed, rulesFor, workers, agentsOf, limitOf, reloadRules, typeMatches } = await import("../src/runtime.ts");
+const { parseRules, RulesError, rules, ruleNamed, rulesFor, workers, agentsOf, limitOf, reloadRules, typeMatches } =
+  await import("../host/runtime.ts");
 
 const good = () => JSON.parse(readFileSync(join(import.meta.dirname, "rules.fixture.json"), "utf8"));
 const problem = (change: (r: any) => void, words: RegExp) => {
   const r = good();
   change(r);
-  assert.throws(() => parseRules(JSON.stringify(r)), (error: Error) => {
-    assert.ok(error instanceof RulesError);
-    assert.match(error.message, words);
-    return true;
-  });
+  assert.throws(
+    () => parseRules(JSON.stringify(r)),
+    (error: Error) => {
+      assert.ok(error instanceof RulesError);
+      assert.match(error.message, words);
+      return true;
+    },
+  );
 };
 
 test("the fixture loads, with defaults filled in", () => {
@@ -37,34 +41,92 @@ test("the fixture loads, with defaults filled in", () => {
 });
 
 test("a mistake says which rule and what is wrong", () => {
-  problem((r) => { r.rules[0].to = "nobody"; }, /规则「意见」.*to.*不是已登记的 Agent：nobody/);
-  problem((r) => { r.rules[0].when.source = "nowhere"; }, /规则「意见」.*来源.*nowhere/);
-  problem((r) => { r.rules[1].name = "意见"; }, /规则名「意见」重复了/);
-  problem((r) => { r.rules[0].when.types = []; }, /规则「意见」.*types/);
-  problem((r) => { r.rules[0].when.cron = "0 9 * * *"; }, /规则「意见」.*when/);
-  problem((r) => { r.rules[3].when.cron = "99 * * * *"; }, /规则「早报」.*cron/);
-  problem((r) => { r.rules[3].when.cron = "0 0 30 2 *"; }, /规则「早报」.*不会到来/);
-  problem((r) => { r.rules[0].tell = "sometimes"; }, /规则「意见」.*tell/);
-  problem((r) => { delete r.rules[0].cwd; }, /规则「意见」缺少 cwd/);
-  problem((r) => { r.rules[0].cwd = "relative/path"; }, /规则「意见」.*cwd/);
-  problem((r) => { delete r.rules[1].prompt; }, /规则「告警」.*skill.*prompt/);
-  problem((r) => { r.rules[0].oops = 1; }, /规则「意见」有不认识的字段 oops/);
-  problem((r) => { delete r.rules[0].parallel; r.rules[1].group = "notes"; r.rules[1].parallel = 2; }, /组「notes」.*parallel/);
-  problem((r) => { r.rules[0].parallel = 0; }, /规则「意见」.*parallel/);
-  problem((r) => { r.rules[4].emits.source = "nowhere"; }, /规则「巡检」.*emits/);
-  problem((r) => { delete r.agents.a1.worker; }, /Agent a1 缺少 worker/);
-  problem((r) => { r.agents.a1.access = "root"; }, /Agent a1.*access/);
-  problem((r) => { delete r.agents.a3.command; }, /Agent a3.*command/);
-  problem((r) => { r.agents.a1.oops = 1; }, /Agent a1 有不认识的字段 oops/);
-  problem((r) => { r.sources.schedule = { name: "x" }; }, /schedule.*保留/);
-  problem((r) => { r.sources["Bad Id"] = { name: "x" }; }, /来源的编号/);
-  problem((r) => { r.channels.chat.answerers = "me"; }, /通道 chat.*answerers/);
-  problem((r) => { r.elsewhere[0].to = "nobody"; }, /定时任务「每周清理」.*to/);
-  problem((r) => { r.elsewhere[0].source = "nowhere"; }, /定时任务「每周清理」.*source/);
-  problem((r) => { r.elsewhere[0].cron = "nope"; }, /定时任务「每周清理」.*cron/);
-  problem((r) => { r.elsewhere[0].name = "意见"; }, /定时任务「意见」.*重名/);
-  problem((r) => { r.timezone = "Mars/Olympus"; }, /timezone/);
-  problem((r) => { r.askFirst = "删数据"; }, /askFirst/);
+  problem((r) => {
+    r.rules[0].to = "nobody";
+  }, /规则「意见」.*to.*不是已登记的 Agent：nobody/);
+  problem((r) => {
+    r.rules[0].when.source = "nowhere";
+  }, /规则「意见」.*来源.*nowhere/);
+  problem((r) => {
+    r.rules[1].name = "意见";
+  }, /规则名「意见」重复了/);
+  problem((r) => {
+    r.rules[0].when.types = [];
+  }, /规则「意见」.*types/);
+  problem((r) => {
+    r.rules[0].when.cron = "0 9 * * *";
+  }, /规则「意见」.*when/);
+  problem((r) => {
+    r.rules[3].when.cron = "99 * * * *";
+  }, /规则「早报」.*cron/);
+  problem((r) => {
+    r.rules[3].when.cron = "0 0 30 2 *";
+  }, /规则「早报」.*不会到来/);
+  problem((r) => {
+    r.rules[0].tell = "sometimes";
+  }, /规则「意见」.*tell/);
+  problem((r) => {
+    delete r.rules[0].cwd;
+  }, /规则「意见」缺少 cwd/);
+  problem((r) => {
+    r.rules[0].cwd = "relative/path";
+  }, /规则「意见」.*cwd/);
+  problem((r) => {
+    delete r.rules[1].prompt;
+  }, /规则「告警」.*skill.*prompt/);
+  problem((r) => {
+    r.rules[0].oops = 1;
+  }, /规则「意见」有不认识的字段 oops/);
+  problem((r) => {
+    delete r.rules[0].parallel;
+    r.rules[1].group = "notes";
+    r.rules[1].parallel = 2;
+  }, /组「notes」.*parallel/);
+  problem((r) => {
+    r.rules[0].parallel = 0;
+  }, /规则「意见」.*parallel/);
+  problem((r) => {
+    r.rules[4].emits.source = "nowhere";
+  }, /规则「巡检」.*emits/);
+  problem((r) => {
+    delete r.agents.a1.worker;
+  }, /Agent a1 缺少 worker/);
+  problem((r) => {
+    r.agents.a1.access = "root";
+  }, /Agent a1.*access/);
+  problem((r) => {
+    delete r.agents.a3.command;
+  }, /Agent a3.*command/);
+  problem((r) => {
+    r.agents.a1.oops = 1;
+  }, /Agent a1 有不认识的字段 oops/);
+  problem((r) => {
+    r.sources.schedule = { name: "x" };
+  }, /schedule.*保留/);
+  problem((r) => {
+    r.sources["Bad Id"] = { name: "x" };
+  }, /来源的编号/);
+  problem((r) => {
+    r.channels.chat.answerers = "me";
+  }, /通道 chat.*answerers/);
+  problem((r) => {
+    r.elsewhere[0].to = "nobody";
+  }, /定时任务「每周清理」.*to/);
+  problem((r) => {
+    r.elsewhere[0].source = "nowhere";
+  }, /定时任务「每周清理」.*source/);
+  problem((r) => {
+    r.elsewhere[0].cron = "nope";
+  }, /定时任务「每周清理」.*cron/);
+  problem((r) => {
+    r.elsewhere[0].name = "意见";
+  }, /定时任务「意见」.*重名/);
+  problem((r) => {
+    r.timezone = "Mars/Olympus";
+  }, /timezone/);
+  problem((r) => {
+    r.askFirst = "删数据";
+  }, /askFirst/);
   assert.throws(() => parseRules("{ not json"), /不是 JSON/);
 });
 
@@ -77,7 +139,10 @@ test("types match exactly, by prefix or all", () => {
 });
 
 test("the lookups the hub uses", () => {
-  assert.deepEqual(rulesFor("ops", "alert.raised").map((r) => r.name), ["告警", "告警也记一笔"]);
+  assert.deepEqual(
+    rulesFor("ops", "alert.raised").map((r) => r.name),
+    ["告警", "告警也记一笔"],
+  );
   assert.deepEqual(rulesFor("app", "alert.raised"), []);
   assert.deepEqual(workers(), ["w1", "w2"]);
   assert.deepEqual(agentsOf("w1"), ["a1", "a3"]);

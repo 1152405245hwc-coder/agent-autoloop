@@ -6,7 +6,18 @@
 // the user's Agents aren't told how to set it up, or something of the user's own is overwritten doing so, or a test install does it.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,19 +28,27 @@ const bin = join(import.meta.dirname, "..", "bin", "agent-hub.ts");
 const env: NodeJS.ProcessEnv = { ...process.env, AGENT_HUB_HOME: home };
 delete env.AGENT_HUB_RULES;
 delete env.AGENT_HUB_PUBLIC_URL;
-const cli = (...args: string[]) => spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", bin, ...args], { env, encoding: "utf8", timeout: 30_000 });
-
-const freePort = () => new Promise<number>((resolve) => {
-  const probe = createServer();
-  probe.listen(0, "127.0.0.1", () => {
-    const { port } = probe.address() as { port: number };
-    probe.close(() => resolve(port));
+const cli = (...args: string[]) =>
+  spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", bin, ...args], {
+    env,
+    encoding: "utf8",
+    timeout: 30_000,
   });
-});
+
+const freePort = () =>
+  new Promise<number>((resolve) => {
+    const probe = createServer();
+    probe.listen(0, "127.0.0.1", () => {
+      const { port } = probe.address() as { port: number };
+      probe.close(() => resolve(port));
+    });
+  });
 
 const fence = "```";
 const script = join(home, "agent.sh");
-writeFileSync(script, `#!/bin/sh
+writeFileSync(
+  script,
+  `#!/bin/sh
 # Asks on its first go; with an answer in the context file, finishes. Asked to, it only says something.
 if grep -q 'card.answered' "$AGENT_HUB_CONTEXT"; then
   echo "你选了绿色，做完了"
@@ -51,7 +70,8 @@ ${fence}agent-hub
 ${fence}
 END
 fi
-`);
+`,
+);
 chmodSync(script, 0o755);
 
 let up: ReturnType<typeof spawn> | undefined;
@@ -78,7 +98,13 @@ test("one machine, one command: an event, a question, an answer, the work done",
   up = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", bin, "up"], { env, stdio: "ignore" });
   const url = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 100; i++) {
-    if (await fetch(`${url}/healthz`).then((r) => r.ok, () => false)) break;
+    if (
+      await fetch(`${url}/healthz`).then(
+        (r) => r.ok,
+        () => false,
+      )
+    )
+      break;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   assert.equal((await (await fetch(`${url}/healthz`)).json()).ok, true);
@@ -91,7 +117,8 @@ test("one machine, one command: an event, a question, an answer, the work done",
   assert.match(emitted.stdout, /交给了：试一下/);
 
   const config = JSON.parse(readFileSync(join(home, "config.json"), "utf8"));
-  const state = async () => (await fetch(`${url}/v1/state`, { headers: { authorization: `Bearer ${config.owner}` } })).json();
+  const state = async () =>
+    (await fetch(`${url}/v1/state`, { headers: { authorization: `Bearer ${config.owner}` } })).json();
   const until = async (done: (s: any) => boolean) => {
     for (let i = 0; i < 150; i++) {
       const now = await state();
@@ -113,7 +140,9 @@ test("one machine, one command: an event, a question, an answer, the work done",
   assert.equal(cli("answer", String(card.id), "7").status, 1, "there's no seventh option");
   const answered = cli("answer", String(card.id), "2");
   assert.equal(answered.status, 0, answered.stderr);
-  const finished = await until((s) => s.runs.some((r: any) => r.summary === "你选了绿色，做完了" && r.state === "done"));
+  const finished = await until((s) =>
+    s.runs.some((r: any) => r.summary === "你选了绿色，做完了" && r.state === "done"),
+  );
   assert.equal(finished.cards.length, 0);
   assert.equal(finished.recentCards[0].state, "done");
   assert.equal(finished.recentCards[0].result, "你选了绿色，做完了");
@@ -123,7 +152,11 @@ test("one machine, one command: an event, a question, an answer, the work done",
   const status = cli("status");
   assert.match(status.stdout, /在跑 0 · 排队 0 · 今天做完 2 · 等你 0/);
   assert.match(status.stdout, /你选了绿色，做完了/);
-  const told = spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", bin, "tell", "note-1"], { env, encoding: "utf8", input: "告诉你一声\n" });
+  const told = spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", bin, "tell", "note-1"], {
+    env,
+    encoding: "utf8",
+    input: "告诉你一声\n",
+  });
   assert.match(told.stdout, /说了/);
   assert.match(cli("status").stdout, /告诉你一声/);
   cli("emit", "hello.notice");
@@ -151,9 +184,16 @@ test("the user's Agents are shown how to set it up, when this is the install in 
   writeFileSync(join(person, ".codex", "skills", "agent-hub", "SKILL.md"), "their own");
   const usual: NodeJS.ProcessEnv = { ...env, HOME: person };
   delete usual.AGENT_HUB_HOME;
-  const done = spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", bin, "init", "--no-service", "--command", "true"], { env: usual, encoding: "utf8", timeout: 30_000 });
+  const done = spawnSync(
+    process.execPath,
+    ["--disable-warning=ExperimentalWarning", bin, "init", "--no-service", "--command", "true"],
+    { env: usual, encoding: "utf8", timeout: 30_000 },
+  );
   assert.equal(done.status, 0, done.stderr);
-  assert.equal(realpathSync(join(person, ".claude", "skills", "agent-hub")), realpathSync(join(import.meta.dirname, "..", "skills", "agent-hub")));
+  assert.equal(
+    realpathSync(join(person, ".claude", "skills", "agent-hub")),
+    realpathSync(join(import.meta.dirname, "..", "skills", "agent-hub")),
+  );
   assert.ok(lstatSync(join(person, ".claude", "skills", "agent-hub")).isSymbolicLink());
   assert.equal(readFileSync(join(person, ".codex", "skills", "agent-hub", "SKILL.md"), "utf8"), "their own");
   assert.ok(existsSync(join(person, ".agent-hub", "config.json")));

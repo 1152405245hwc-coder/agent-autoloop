@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["bin", "src", "plugins", "worker", "cli", "tests", "scripts", "kernel", "protocol", "sim"]
+  "include": ["bin", "host", "plugins", "worker", "cli", "tests", "scripts", "kernel", "protocol", "sim"]
 }

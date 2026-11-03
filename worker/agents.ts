@@ -1,17 +1,26 @@
-// An agent is a process: give it a prompt, read its last message from what it prints. An adapter is what's different about
-// one: its command line and how to read its output. `plugins/<use>/agent.ts`, in this install's folder first, then the ones that
-// ship. Anything with a print mode needs no file at all: `use: "command"` with a command line in rules.json.
+// An agent is a process: give it a prompt, read its last message from what it prints. An adapter is what's different
+// about one: its command line and how to read its output. `plugins/<use>/agent.ts`, in this install's folder first,
+// then the ones that ship. Anything with a print mode needs no file at all: `use: "command"` with a command line in
+// rules.json.
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { loadPlugin } from "../src/plugins.ts";
+import { loadPlugin } from "../host/plugins.ts";
 
 export type Usage = { input?: number; output?: number; cached?: number; cost?: number };
 export type Access = "read" | "edit" | "full";
 /** One launch of an agent. `resume` is the session to go on in, if any; otherwise `session` is a new id it may use. */
 export type Turn = {
-  prompt: string; session: string; resume: string | null; cwd: string; model?: string; effort?: string; access: Access;
-  command?: string[]; contextFile: string; folder: string;
+  prompt: string;
+  session: string;
+  resume: string | null;
+  cwd: string;
+  model?: string;
+  effort?: string;
+  access: Access;
+  command?: string[];
+  contextFile: string;
+  folder: string;
 };
 export type Reading = { text?: string; session?: string; usage?: Usage; error?: string; finished?: boolean };
 export type Adapter = {
@@ -30,19 +39,25 @@ const adapters = new Map<string, Adapter>();
 export async function adapterFor(use: string): Promise<Adapter> {
   const known = adapters.get(use);
   if (known) return known;
-  const adapter = await loadPlugin(use,"agent") as Adapter;
+  const adapter = (await loadPlugin(use, "agent")) as Adapter;
   adapters.set(use, adapter);
   return adapter;
 }
 
 const found = new Map<string, string | null>();
 
-/** Where a program is: on the login shell's PATH (launchd and systemd start with a bare one), or in one of these places. */
+/** Where a program is: on the login shell's PATH (launchd and systemd start with a bare one), or in one of these. */
 export function findProgram(name: string, elsewhere: () => string[] = () => []) {
   if (!found.has(name)) {
+    const shell = process.env.SHELL ?? "/bin/sh";
     let onPath: string | null = null;
     try {
-      onPath = execFileSync(process.env.SHELL ?? "/bin/sh", ["-lc", `command -v ${name}`], { encoding: "utf8", timeout: 15_000, stdio: ["ignore", "pipe", "ignore"] }).trim().split("\n").at(-1) || null;
+      const printed = execFileSync(shell, ["-lc", `command -v ${name}`], {
+        encoding: "utf8",
+        timeout: 15_000,
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      onPath = printed.trim().split("\n").at(-1) || null;
     } catch {}
     found.set(name, onPath ?? elsewhere().find(existsSync) ?? null);
   }

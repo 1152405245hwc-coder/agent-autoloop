@@ -13,21 +13,43 @@ test("a thousand completed requests cannot stand in for a thousand waiting ones"
 test("an early request rejection stays observable until the batch is consumed", async () => {
   const failure = new Error("连接断了");
   const pending = observe(Promise.reject(failure));
-  await new Promise(resolve => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(await pending, { status: "rejected", reason: failure });
 });
 
-test("budget checks fail on startup, idle memory, durable throughput, latency or simulation regressions",()=>{
-  const measured={coldMs:85,idleRssMB:55,durableEventsPerSecond:2356,eventToClaimP99Ms:1.8,simulationStepsPerSecond:34000};
-  checkBudget(measured);
-  for(const [key,value] of Object.entries({coldMs:151,idleRssMB:61,durableEventsPerSecond:1999,eventToClaimP99Ms:11,simulationStepsPerSecond:19999}))assert.throws(()=>checkBudget({...measured,[key]:value}));
-});
-test("dispatch latency includes waking an already waiting worker",async()=>{
-  let waiting=false,finish:(value:unknown)=>void=()=>{};
-  const request=async(path:string)=>{
-    if(path.startsWith("/v1/work")){waiting=true;return new Promise(resolve=>{finish=resolve;});}
-    assert.equal(waiting,true);setTimeout(()=>finish({job:{run:1}}),55);return {};
+test("budget checks fail on startup, idle memory, durable throughput, latency or simulation regressions", () => {
+  const measured = {
+    coldMs: 85,
+    idleRssMB: 55,
+    durableEventsPerSecond: 2356,
+    eventToClaimP99Ms: 1.8,
+    simulationStepsPerSecond: 34000,
   };
-  const measured=await dispatchLatency(request,async()=>assert.equal(waiting,true),1);
-  assert.ok(measured.ms>=40);assert.equal(measured.job.run,1);
+  checkBudget(measured);
+  for (const [key, value] of Object.entries({
+    coldMs: 151,
+    idleRssMB: 61,
+    durableEventsPerSecond: 1999,
+    eventToClaimP99Ms: 11,
+    simulationStepsPerSecond: 19999,
+  }))
+    assert.throws(() => checkBudget({ ...measured, [key]: value }));
+});
+test("dispatch latency includes waking an already waiting worker", async () => {
+  let waiting = false;
+  let finish: (value: unknown) => void = () => {};
+  const request = async (path: string) => {
+    if (path.startsWith("/v1/work")) {
+      waiting = true;
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    }
+    assert.equal(waiting, true);
+    setTimeout(() => finish({ job: { run: 1 } }), 55);
+    return {};
+  };
+  const measured = await dispatchLatency(request, async () => assert.equal(waiting, true), 1);
+  assert.ok(measured.ms >= 40);
+  assert.equal(measured.job.run, 1);
 });
