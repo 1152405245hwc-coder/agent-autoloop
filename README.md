@@ -10,7 +10,7 @@
 
 - **一台电脑一条命令就能跑。** 不用服务器，不用开放任何端口。
 - **没有界面，没有 SDK。** 协议就是 HTTP + JSON，命令行只是它的一个客户端。
-- **Agent、来源、通道都能换。** 能打印最后一条消息的命令行 Agent，一行配置就能接。
+- **事件、Agent、通道都能换。** 能打印最后一条消息的命令行 Agent，一行配置就能接。
 - **没有运行时依赖。** Node 24 自带的就够。
 
 [English](README.en.md)
@@ -111,7 +111,7 @@ node sim/random.ts 24301 200000
 node sim/crash.ts 1000 12648430
 ```
 
-**一份协议。** 来源、接单程序、通道、命令行说的是同一套 HTTP + JSON。一个只用 curl 和 jq 写的通道，几十行就够：[examples/channel.sh](examples/channel.sh)。
+**一份协议。** 事件插件、接单程序、通道、命令行说的是同一套 HTTP + JSON。一个只用 curl 和 jq 写的通道，几十行就够：[examples/channel.sh](examples/channel.sh)。
 
 ## 实测
 
@@ -130,7 +130,7 @@ Apple M5 Pro、24 GB、Node 24.21.0。运行 `npm run benchmark` 复现 HTTP 服
 
 ## 三个口子
 
-**来源把变化变成事件。** 系统直接发 `POST /v1/events`，GitHub 用验签 Webhook，定时任务写 `cron`。不能推送的系统用[轮询脚本](examples/watch-github-issues.sh)，没新事件就不调用模型。
+**事件插件把变化变成事件。** 系统直接发 `POST /v1/events`，GitHub 用验签 Webhook，定时任务写 `cron`。不能推送的系统用[轮询脚本](examples/watch-github-issues.sh)，没新事件就不调用模型。
 
 **Agent 接活。实测跑通：**
 

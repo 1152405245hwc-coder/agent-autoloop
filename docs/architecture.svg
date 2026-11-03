@@ -1,110 +1,145 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 660" role="img" aria-labelledby="t">
-<title id="t">Agent 自动化中台架构图</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 588" role="img" aria-labelledby="t">
+<title id="t">Agent 自动化中台架构图：内核在中间，其他都是插件</title>
 <defs>
 <style>
-svg{--bg:#faf9f5;--ink:#1d1c19;--muted:#6e6b64;--line:#d6d3cb;--card:#fff;--item:#faf9f5;--hub:#f1eee6;--accent:#c2491d}
-@media (prefers-color-scheme:dark){svg{--bg:#151412;--ink:#f1efe9;--muted:#a29e95;--line:#45433d;--card:#1e1d1a;--item:#262420;--hub:#272520;--accent:#ef8a62}}
+svg{--bg:#faf9f5;--ink:#1d1c19;--muted:#6e6b64;--line:#d6d3cb;--card:#fff;--item:#f4f2ec;--accent:#c2491d;--core:#1d1c19;--core-ink:#faf9f5;--core-chip:#2f2d28;--core-sub:#b9b5ab;--core-accent:#ef8a62}
+@media (prefers-color-scheme:dark){svg{--bg:#151412;--ink:#f1efe9;--muted:#a29e95;--line:#45433d;--card:#1e1d1a;--item:#262420;--accent:#ef8a62;--core:#f1efe9;--core-ink:#1d1c19;--core-chip:#dfdcd3;--core-sub:#5f5c55;--core-accent:#c2491d}}
 text{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:14px;fill:var(--ink)}
-.h1{font-size:20px;font-weight:600}
-.h2{font-size:16px;font-weight:600}
-.h3{font-size:15px;font-weight:600}
+.h2{font-size:17px;font-weight:600}
 .s{font-size:12.5px;fill:var(--muted)}
 .r{font-size:13.5px}
-.m{font-family:ui-monospace,SFMono-Regular,Menlo,"PingFang SC",monospace;font-size:13.5px}
-.l{font-size:13px;font-weight:600;fill:var(--accent)}
+.l{font-size:14px;font-weight:600;fill:var(--accent)}
 .bg{fill:var(--bg)}
-.box{fill:var(--card);stroke:var(--line)}
+.plug{fill:var(--card);stroke:var(--muted);stroke-width:1.3;stroke-dasharray:6 5}
 .item{fill:var(--item);stroke:var(--line)}
-.hub{fill:var(--hub);stroke:var(--ink);stroke-width:1.6}
+.more{fill:none;stroke:var(--line);stroke-dasharray:4 4}
+.dot{fill:var(--muted)}
+.core{fill:var(--core)}
+.chip{fill:var(--core-chip)}
+.ct{font-size:32px;font-weight:700;fill:var(--core-ink)}
+.cs{font-size:12.5px;fill:var(--core-sub)}
+.cn{font-size:15px;font-weight:600;fill:var(--core-ink)}
+.cd{font-size:12px;fill:var(--core-sub)}
+.cl{font-size:13px;fill:var(--core-ink)}
+.you{fill:var(--card);stroke:var(--ink);stroke-width:1.4}
+.badge{fill:var(--accent)}
+.badge-in{fill:var(--core-accent)}
+.n,.n-in{font-size:13px;font-weight:700;fill:var(--bg)}
 .conn{fill:none;stroke:var(--accent);stroke-width:2;marker-end:url(#a)}
-.flow{fill:none;stroke:var(--muted);stroke-width:1.2;marker-end:url(#b)}
+.back{fill:none;stroke:var(--core-accent);stroke-width:1.6;stroke-dasharray:5 4;marker-end:url(#c)}
+.flow{fill:none;stroke:var(--muted);stroke-width:1.3;marker-end:url(#b)}
+.both{fill:none;stroke:var(--muted);stroke-width:1.3;marker-start:url(#b);marker-end:url(#b)}
 </style>
 <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--accent)"/></marker>
-<marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--muted)"/></marker>
+<marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--muted)"/></marker>
+<marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--core-accent)"/></marker>
 </defs>
-<rect class="bg" x="0" y="0" width="960" height="660" rx="18"/>
-<rect class="box" x="250" y="24" width="460" height="92" rx="12"/>
-<text x="270" y="52" class="h2">客户端</text>
-<text x="324" y="52" class="s">看全局、回答、停止</text>
-<rect class="item" x="270" y="64" width="120" height="36" rx="8"/>
-<text x="330.0" y="87.0" class="r" text-anchor="middle">命令行</text>
-<rect class="item" x="400" y="64" width="90" height="36" rx="8"/>
-<text x="445.0" y="87.0" class="r" text-anchor="middle">MCP</text>
-<rect class="item" x="500" y="64" width="190" height="36" rx="8"/>
-<text x="595.0" y="87.0" class="r" text-anchor="middle">你自己的页面</text>
-<path class="conn" d="M480 116V168"/>
-<text x="494" y="148" class="l">看全局 · 订阅日志</text>
-<rect class="hub" x="290" y="170" width="380" height="336" rx="16"/>
-<text x="314" y="204" class="h1">中台</text>
-<text x="366" y="204" class="s">零依赖 · 崩溃后直接恢复</text>
-<rect class="box" x="314" y="218" width="332" height="40" rx="8"/>
-<text x="480" y="243" class="m" text-anchor="middle">门：handle(Request) → Response</text>
-<path class="flow" d="M480 258V277"/>
-<rect class="box" x="314" y="278" width="332" height="62" rx="8"/>
-<text x="480" y="304" class="m" text-anchor="middle">decide(视图, 输入, 时间) → 事实</text>
-<text x="480" y="326" class="s" text-anchor="middle">不发请求、不读时钟、不用随机数</text>
-<path class="flow" d="M396 340V359"/>
-<text x="406" y="354" class="s">一个事务</text>
-<rect class="box" x="314" y="360" width="158" height="62" rx="8"/>
-<text x="330" y="386" class="h3">日志</text>
-<text x="330" y="408" class="s">事实只追加</text>
-<path class="flow" d="M472 391H487"/>
-<rect class="box" x="488" y="360" width="158" height="62" rx="8"/>
-<text x="504" y="386" class="h3">视图</text>
-<text x="504" y="408" class="s">随时可重建</text>
-<rect class="box" x="314" y="434" width="332" height="56" rx="8"/>
-<text x="480" y="458" class="h3" text-anchor="middle">一个定时器</text>
-<text x="480" y="478" class="s" text-anchor="middle">cron、复查、重试都在一张到期表</text>
-<path class="flow" d="M314 462H302V309H313"/>
-<rect class="box" x="20" y="170" width="190" height="336" rx="12"/>
-<text x="38" y="204" class="h2">来源</text>
-<rect class="item" x="36" y="220" width="158" height="62" rx="8"/>
-<text x="48" y="246">你的系统</text>
-<text x="48" y="266" class="s">POST /v1/events</text>
-<rect class="item" x="36" y="290" width="158" height="62" rx="8"/>
-<text x="48" y="316">别人家的 Webhook</text>
-<text x="48" y="336" class="s">验签、翻译成事件</text>
-<rect class="item" x="36" y="360" width="158" height="62" rx="8"/>
-<text x="48" y="386">定时</text>
-<text x="48" y="406" class="s">规则里写 cron</text>
-<rect class="item" x="36" y="430" width="158" height="62" rx="8"/>
-<text x="48" y="456">轮询脚本</text>
-<text x="48" y="476" class="s">没新东西不花 Token</text>
-<path class="conn" d="M210 338H288"/>
-<text x="249" y="326" class="l" text-anchor="middle">事件</text>
-<rect class="box" x="750" y="170" width="190" height="150" rx="12"/>
-<text x="768" y="204" class="h2">接单程序</text>
-<text x="768" y="224" class="s">每台电脑一个，只往外连</text>
-<text x="768" y="250" class="r">启动 Agent，盯到结束</text>
-<text x="768" y="274" class="r">回答来了接回原会话</text>
-<text x="768" y="298" class="r">随时可杀，重启接着盯</text>
-<path class="conn" d="M750 275H672"/>
-<text x="711" y="243" class="l" text-anchor="middle">领活</text>
-<text x="711" y="261" class="l" text-anchor="middle">交回执</text>
-<path class="flow" d="M845 321V355" style="marker-start:url(#b)"/>
-<text x="835" y="343" class="s" text-anchor="end">提示词</text>
-<text x="855" y="343" class="s">最后一条消息</text>
-<rect class="box" x="750" y="356" width="190" height="150" rx="12"/>
-<text x="768" y="390" class="h2">Agent</text>
-<text x="768" y="410" class="s">就是一个进程</text>
-<text x="768" y="438" class="r">Claude Code、Codex</text>
-<text x="768" y="462" class="r">任何 ACP Agent</text>
-<text x="768" y="486" class="r">任何能打印结果的命令行</text>
-<rect class="box" x="190" y="548" width="580" height="92" rx="12"/>
-<text x="210" y="574" class="h2">通道</text>
-<text x="256" y="574" class="s">把卡片送到你面前</text>
-<rect class="item" x="210" y="586" width="96" height="38" rx="8"/>
-<text x="258.0" y="610.0" class="r" text-anchor="middle">桌面通知</text>
-<rect class="item" x="314" y="586" width="66" height="38" rx="8"/>
-<text x="347.0" y="610.0" class="r" text-anchor="middle">飞书</text>
-<rect class="item" x="388" y="586" width="216" height="38" rx="8"/>
-<text x="496.0" y="610.0" class="r" text-anchor="middle">钉钉、企微、Slack、Discord</text>
-<rect class="item" x="612" y="586" width="138" height="38" rx="8"/>
-<text x="681.0" y="610.0" class="r" text-anchor="middle">卡片链接</text>
-<path class="conn" d="M480 548V508"/>
-<text x="494" y="533" class="l">领卡片 · 转回答（回答也是一条事件）</text>
-<path class="flow" d="M771 594H823" style="marker-start:url(#b)"/>
-<rect class="box" x="824" y="564" width="100" height="60" rx="30"/>
-<text x="874" y="600" class="h2" text-anchor="middle">你</text>
-<text x="874" y="644" class="s" text-anchor="middle">只在要判断时被打扰</text>
+<rect class="bg" x="0" y="0" width="960" height="588" rx="18"/>
+<rect class="plug" x="24" y="24" width="196" height="262" rx="14"/>
+<text x="42" y="54" class="h2">事件插件</text>
+<text x="42" y="74" class="s">把变化变成事件</text>
+<rect class="item" x="40" y="92.0" width="164" height="29.2" rx="8"/>
+<text x="122.0" y="111.6" class="r" text-anchor="middle">定时任务</text>
+<rect class="item" x="40" y="129.2" width="164" height="29.2" rx="8"/>
+<text x="122.0" y="148.79999999999998" class="r" text-anchor="middle">GitHub</text>
+<rect class="item" x="40" y="166.4" width="164" height="29.2" rx="8"/>
+<text x="122.0" y="186.0" class="r" text-anchor="middle">你的系统</text>
+<rect class="item" x="40" y="203.60000000000002" width="164" height="29.2" rx="8"/>
+<text x="122.0" y="223.20000000000002" class="r" text-anchor="middle">轮询脚本</text>
+<rect class="more" x="40" y="240.8" width="164" height="29.2" rx="8"/>
+<circle class="dot" cx="110.0" cy="255.4" r="2.4"/>
+<circle class="dot" cx="122.0" cy="255.4" r="2.4"/>
+<circle class="dot" cx="134.0" cy="255.4" r="2.4"/>
+<rect class="plug" x="290" y="24" width="220" height="262" rx="14"/>
+<text x="308" y="54" class="h2">Agent 插件</text>
+<text x="308" y="74" class="s">接活，跑完一轮就退出</text>
+<rect class="item" x="306" y="92.0" width="188" height="29.2" rx="8"/>
+<text x="400.0" y="111.6" class="r" text-anchor="middle">Claude Code</text>
+<rect class="item" x="306" y="129.2" width="188" height="29.2" rx="8"/>
+<text x="400.0" y="148.79999999999998" class="r" text-anchor="middle">Codex</text>
+<rect class="item" x="306" y="166.4" width="188" height="29.2" rx="8"/>
+<text x="400.0" y="186.0" class="r" text-anchor="middle">DeepSeek Harness</text>
+<rect class="item" x="306" y="203.60000000000002" width="188" height="29.2" rx="8"/>
+<text x="400.0" y="223.20000000000002" class="r" text-anchor="middle">Grok Bot</text>
+<rect class="more" x="306" y="240.8" width="188" height="29.2" rx="8"/>
+<circle class="dot" cx="388.0" cy="255.4" r="2.4"/>
+<circle class="dot" cx="400.0" cy="255.4" r="2.4"/>
+<circle class="dot" cx="412.0" cy="255.4" r="2.4"/>
+<rect class="plug" x="580" y="24" width="210" height="262" rx="14"/>
+<text x="598" y="54" class="h2">通道插件</text>
+<text x="598" y="74" class="s">把卡片送到你面前</text>
+<rect class="item" x="596" y="92.0" width="178" height="29.2" rx="8"/>
+<text x="685.0" y="111.6" class="r" text-anchor="middle">桌面通知</text>
+<rect class="item" x="596" y="129.2" width="178" height="29.2" rx="8"/>
+<text x="685.0" y="148.79999999999998" class="r" text-anchor="middle">飞书</text>
+<rect class="item" x="596" y="166.4" width="178" height="29.2" rx="8"/>
+<text x="685.0" y="186.0" class="r" text-anchor="middle">钉钉 · 企微</text>
+<rect class="item" x="596" y="203.60000000000002" width="178" height="29.2" rx="8"/>
+<text x="685.0" y="223.20000000000002" class="r" text-anchor="middle">Slack · Discord</text>
+<rect class="more" x="596" y="240.8" width="178" height="29.2" rx="8"/>
+<circle class="dot" cx="673.0" cy="255.4" r="2.4"/>
+<circle class="dot" cx="685.0" cy="255.4" r="2.4"/>
+<circle class="dot" cx="697.0" cy="255.4" r="2.4"/>
+<path class="both" d="M791 155H838"/>
+<rect class="you" x="840" y="125" width="96" height="60" rx="30"/>
+<text x="888" y="161" class="h2" text-anchor="middle">你</text>
+<rect class="core" x="24" y="344" width="912" height="122" rx="20"/>
+<text x="48" y="394" class="ct">内核</text>
+<text x="48" y="418" class="cs">零依赖 · 不主动连任何东西</text>
+<rect class="chip" x="236" y="358" width="160" height="58" rx="8"/>
+<text x="316.0" y="384.0" class="cn" text-anchor="middle">规则</text>
+<text x="316.0" y="403.0" class="cd" text-anchor="middle">决定交给谁</text>
+<rect class="chip" x="408" y="358" width="160" height="58" rx="8"/>
+<text x="488.0" y="384.0" class="cn" text-anchor="middle">事项</text>
+<text x="488.0" y="403.0" class="cd" text-anchor="middle">等回答不占进程</text>
+<rect class="chip" x="580" y="358" width="160" height="58" rx="8"/>
+<text x="660.0" y="384.0" class="cn" text-anchor="middle">日志</text>
+<text x="660.0" y="403.0" class="cd" text-anchor="middle">只追加、可追溯</text>
+<rect class="chip" x="752" y="358" width="160" height="58" rx="8"/>
+<text x="832.0" y="384.0" class="cn" text-anchor="middle">定时器</text>
+<text x="832.0" y="403.0" class="cd" text-anchor="middle">cron、复查、重试</text>
+<path class="conn" d="M122 288V342"/>
+<circle class="badge" cx="122" cy="315" r="12"/>
+<text x="122" y="319.5" class="n" text-anchor="middle">1</text>
+<text x="142" y="320" class="l">事件</text>
+<path class="conn" d="M360 342V288"/>
+<circle class="badge" cx="360" cy="315" r="12"/>
+<text x="360" y="319.5" class="n" text-anchor="middle">2</text>
+<text x="340" y="320" class="l" text-anchor="end">派活</text>
+<path class="conn" d="M440 288V342"/>
+<circle class="badge" cx="440" cy="315" r="12"/>
+<text x="440" y="319.5" class="n" text-anchor="middle">3</text>
+<text x="460" y="320" class="l">回执</text>
+<path class="conn" d="M645 342V288"/>
+<circle class="badge" cx="645" cy="315" r="12"/>
+<text x="645" y="319.5" class="n" text-anchor="middle">4</text>
+<text x="625" y="320" class="l" text-anchor="end">卡片</text>
+<path class="conn" d="M725 288V342"/>
+<circle class="badge" cx="725" cy="315" r="12"/>
+<text x="725" y="319.5" class="n" text-anchor="middle">5</text>
+<text x="745" y="320" class="l">回答</text>
+<circle class="badge-in" cx="725" cy="440" r="10"/>
+<text x="725" y="444.5" class="n-in" text-anchor="middle">5</text>
+<path class="back" d="M713 440H374"/>
+<circle class="badge-in" cx="360" cy="440" r="10"/>
+<text x="360" y="444.5" class="n-in" text-anchor="middle">2</text>
+<text x="745" y="445" class="cl">回答触发下一轮</text>
+<path class="both" d="M480 467V498"/>
+<rect class="plug" x="24" y="500" width="912" height="64" rx="14"/>
+<text x="42" y="528" class="h2">交付流水线</text>
+<text x="42" y="548" class="s">也是一个插件</text>
+<rect class="item" x="236" y="514" width="108" height="36" rx="8"/>
+<text x="290.0" y="537.0" class="r" text-anchor="middle">审查</text>
+<path class="flow" d="M345 532H373"/>
+<rect class="item" x="374" y="514" width="108" height="36" rx="8"/>
+<text x="428.0" y="537.0" class="r" text-anchor="middle">检查</text>
+<path class="flow" d="M483 532H511"/>
+<rect class="item" x="512" y="514" width="108" height="36" rx="8"/>
+<text x="566.0" y="537.0" class="r" text-anchor="middle">合并</text>
+<path class="flow" d="M621 532H649"/>
+<rect class="item" x="650" y="514" width="108" height="36" rx="8"/>
+<text x="704.0" y="537.0" class="r" text-anchor="middle">上线</text>
+<path class="flow" d="M759 532H787"/>
+<rect class="item" x="788" y="514" width="108" height="36" rx="8"/>
+<text x="842.0" y="537.0" class="r" text-anchor="middle">核对版本</text>
 </svg>

@@ -76,7 +76,7 @@ agent-hub uninstall
 
 ## 文档
 
-- [配置手册](skills/agent-hub/SKILL.md)：接来源、通道、多台电脑和交付流水线。
+- [配置手册](skills/agent-hub/SKILL.md)：接事件插件、通道、多台电脑和交付流水线。
 - [协议](docs/protocol.md)：HTTP、回执、事实日志和故障恢复。
 - [插件](docs/plugins.md)：三个可运行的最小例子。
 - [安全边界](SECURITY.md)：密钥、执行权限和交付审查。

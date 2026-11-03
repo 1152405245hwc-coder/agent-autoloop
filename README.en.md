@@ -12,7 +12,7 @@ When it needs your decision, it sends a **card**. Your answer starts another rou
 
 - **One computer, one install command.** No server or inbound ports required.
 - **No dashboard, no SDK.** The protocol is HTTP + JSON; the CLI is one of its clients.
-- **Swap agents, sources, and channels.** A CLI that prints a final message can connect with one configuration entry.
+- **Swap event plugins, agents, and channels.** A CLI that prints a final message can connect with one configuration entry.
 - **No runtime dependencies.** Node 24 is enough.
 
 [中文](README.md)
@@ -113,7 +113,7 @@ node sim/random.ts 24301 200000
 node sim/crash.ts 1000 12648430
 ```
 
-**One protocol.** Sources, workers, channels, and the CLI all speak HTTP + JSON. A channel using only curl and jq fits in a few dozen lines: [examples/channel.sh](examples/channel.sh).
+**One protocol.** Event plugins, workers, channels, and the CLI all speak HTTP + JSON. A channel using only curl and jq fits in a few dozen lines: [examples/channel.sh](examples/channel.sh).
 
 ## Measurements
 
@@ -132,7 +132,7 @@ Idle memory and memory under a thousand concurrent connections are measured sepa
 
 ## Three connections
 
-**Sources turn changes into events.** Your system can post to `/v1/events`, GitHub can send signed webhooks, and schedules use `cron`. Systems without webhooks can use the [polling script](examples/watch-github-issues.sh); no new events means no model call.
+**Event plugins turn changes into events.** Your system can post to `/v1/events`, GitHub can send signed webhooks, and schedules use `cron`. Systems without webhooks can use the [polling script](examples/watch-github-issues.sh); no new events means no model call.
 
 **Agents do the work. Tested end to end:**
 
