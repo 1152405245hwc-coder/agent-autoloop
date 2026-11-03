@@ -1,51 +1,84 @@
 # 安装说明（写给 Agent）
 
-你是用户的 Agent，用户请你装好 Agent 自动化中台。照下面做，能自己做的不要问用户。
+用户请你装好 Agent 自动化中台。先安装，再走一遍提问和继续处理；能自己做的直接做。
 
-## 1. 装
+## 安装
 
-要有 Node.js 24 或更新、git，以及至少一个已经登录的命令行 Agent（Claude Code、Codex，或任何能打印最后一条消息的 CLI）。缺 Node 或 git 就用这台电脑的包管理器装好。
+支持 macOS、Linux，暂不支持 Windows。需要 Node.js 24 或更新、git，以及一个已经登录的命令行 Agent。
+
+先检查 `node --version`。Homebrew 的 `node@24` 默认不进 PATH，装好后还要运行 `export PATH="$(brew --prefix node@24)/bin:$PATH"`；需要长期生效时再写入用户的 shell 配置。不要替用户登录，也不要读取或复制登录凭据。
+
+从 GitHub 安装需要已登录且能访问本仓库的 GitHub CLI；私有仓库不能用匿名下载。下面的命令安装并启用登录后常驻服务：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/KKKKhazix/agent-hub/main/install.sh | sh
+gh api repos/KKKKhazix/agent-hub/contents/install.sh -H 'Accept: application/vnd.github.raw+json' | sh
 ```
 
-它会把程序克隆到 `~/.agent-hub/app`，建好配置、密钥和第一条规则，装成系统服务。不会改用户的任何项目，也不会碰 Claude Code 或 Codex 的登录。
+用户指定本地仓库时，用该目录的安装脚本，并把 `AGENT_HUB_REPO` 设成它的绝对路径。不要下载 GitHub 的旧脚本，也不要用未提交的文件冒充已安装版本；安装器克隆的是本地仓库的 HEAD。
 
-只有别的 CLI 时：`sh install.sh --command 'hermes chat -Q -q {prompt}'`。
-
-## 2. 验
+下面以 `/path/to/agent-hub` 为例，使用已经登录的 Codex：
 
 ```bash
+AGENT_HUB_REPO=/path/to/agent-hub sh /path/to/agent-hub/install.sh --agent codex
+```
+
+`--agent claude` 选择 Claude Code；只有其他 CLI 时加 `--command 'hermes chat -q {prompt}'`。不指定时会检测本机安装的 Agent，第一种作为试跑对象。
+
+程序装进 `~/.agent-hub/app`，配置和记录留在 `~/.agent-hub`。默认打开桌面通知；没有图形会话时安静跳过，问题仍能用 `agent-hub status` 查看。命令优先放在 PATH 中的 `~/.local/bin`，否则选 PATH 里第一个可写目录，不用 sudo、不覆盖其他程序；没有位置时使用安装器打印的完整路径。
+
+## 临时 HOME、CI 或没有服务管理器
+
+使用临时 HOME 时不要装系统服务，不改真实用户的 shell 配置和 Agent 配置。保留调用者给定的 `AGENT_HUB_HOME`；用真实 `CODEX_HOME` 只为了沿用已经完成的 Codex 登录。
+
+在临时环境中选一个空闲端口，运行本地安装脚本，随后启动中台：
+
+```bash
+port=$(node -e 'const s=require("node:net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')
+AGENT_HUB_REPO=/path/to/agent-hub sh /path/to/agent-hub/install.sh --agent codex --no-service --port "$port"
+agent-hub up
+```
+
+`up` 会一直运行。在 Agent 的命令工具里保留它返回的运行中会话，再用另一条命令完成验证；不要用 `nohup … &` 代替，命令工具可能在退出时清理后台进程。看到监听地址后再运行验证命令；启动失败就先处理该会话里的错误。
+
+PATH 没有命令时，把 `agent-hub` 换成安装器打印的完整路径。临时测试使用假的 `osascript`、`notify-send`，不要发送真实消息；不要给已在线的飞书应用再开监听。
+
+## 验证
+
+先查看安装和连接情况，再用真实 Agent 跑完整问答：
+
+```bash
+agent-hub --version
 agent-hub doctor
 agent-hub try
 ```
 
-不方便交互时让 Agent 代为运行命令和读状态。`try` 用用户自己的 Agent 跑一遍完整流程：Agent 干活、问一个问题、等回答、接着把活干完。用量很小。
+`try` 会使用用户的模型额度。在非交互终端，它打印问题和 `agent-hub answer` 命令后退出；这是正常等待，不是失败。把问题转给用户，按他的选择回答，再运行 `agent-hub status`，看到“试跑通过”才算接通。仅为安装验证时，可以选择第二项绿色完成试跑。
 
-你不是在用户的终端里运行时，它把问题打印出来就退出。把问题转给用户，用它打印的 `agent-hub answer` 回答，过一会儿运行 `agent-hub status`，看到“试跑通过”就是通了。
+没有安装系统服务时，`doctor` 会显示服务未运行；检查中台、Agent 和桌面通道是否在线即可，不要为了消除这条提示安装真实服务。
 
-## 3. 问用户想让什么事自己发生
+## 写第一条规则
 
-问一句：“有什么事你希望它发生时 Agent 自己去处理？比如每天早上做一件事、有人提 issue、线上报错。”然后照 `skills/agent-hub/SKILL.md` 写规则，用 `agent-hub check` 检查。规则文件改了几秒内生效。
+安装验证完成后，问用户希望什么事自动处理，再照[配置手册](skills/agent-hub/SKILL.md)写规则。用 `agent-hub check` 检查；改动几秒内生效。
 
-再问一句：Agent 有事问他时发到哪？飞书，或者钉钉、企微、Slack、Discord 这类能往群里发消息的地方，接法见 `skills/agent-hub/SKILL.md`。不接通道也能用，只是要他自己运行 `agent-hub status` 才看得到。要接外部 Webhook 或多台电脑，就把中台放到一台服务器上（同一节）。
+桌面通知只在这台电脑上显示。需要别的通道时，先确认接收位置，再按配置手册接入。不要直接测试发信或发群消息。`access` 的含义见[插件说明](docs/plugins.md#access-实际能做什么)，不要替用户扩大权限。
 
-## 不要做的事
+## 卸载
 
-- 不要替用户登录 Claude Code、Codex 或别的账号，不要读、不要复制它们的凭据。
-- 不要把 `access` 设成 `full`，除非用户明确要求：那是完整权限、不审批。
+卸载程序，默认保留规则、密钥和记录：
 
-## 日志与恢复
+```bash
+agent-hub uninstall
+```
 
-开发测试用 `npm test`、`npm run typecheck`、`npm run format:check`；完整故障与预算检查用 `npm run test:nightly`。这些命令自己建临时目录和随机端口，不需要装系统服务。检查其他实现时，用 `agent-hub conformance <测试地址> --config <测试凭据文件>`，格式见协议。
+终端里确认后才执行；非交互运行时加 `--yes` 跳过确认，数据同样保留。它只停自己的服务和进程、删除指向自身的命令及 Skill 链接，以及安装目录里的 `app`。其他同名文件不动；数据目录不删除。
 
-`kernel/` 不读时钟、不取随机数。`evolve` 更新视图，`commit` 在 WAL + FULL 事务里追加事实，提交后才应答。`agent-hub why 42` 查一轮的事件、规则和回执；`GET /v1/stream?after=42` 供本人客户端按序号续读。备份要一起保留 `hub.db` 和权限为 0600 的 `master.key`；后者推导轮次和卡片链接的 token。普通访问密钥只保存哈希。
+临时安装验证完，用 `agent-hub uninstall --yes` 停掉本次进程，再清掉自己创建的临时目录。不要卸载用户已经在用的中台。
 
-## 可选接入
+## 文档
 
-内置 Agent 是 `claude`、`codex`、`command`、`acp`，交付另用 `delivery`。其他 CLI 的命令和实测支持范围见 README。第三方插件用 `agent-hub add <git 地址>` 安装，根目录放对应的 `agent.ts`、`channel.ts`、`source.ts`。
+- [配置手册](skills/agent-hub/SKILL.md)：接来源、通道、多台电脑和交付流水线。
+- [协议](docs/protocol.md)：HTTP、回执、事实日志和故障恢复。
+- [插件](docs/plugins.md)：三个可运行的最小例子。
+- [安全边界](SECURITY.md)：密钥、执行权限和交付审查。
 
-`agent-hub mcp` 供支持 stdio 2025-11-25 的客户端使用；启动参数和现有密钥的使用方式见配置手册。`agent-hub key remove <种类> <名字>` 会立即撤销访问。
-
-要自动交付 PR，按配置手册的「交付流水线」设置 `ops/delivery.json` 和中台规则；先确认用户已经授权该项目的审查、合并、发布。不要在接单电脑执行 PR 的代码或设置。Ship 使用本仓库发布后固定到完整提交的 Action。
+开发检查用 `npm test`、`npm run typecheck`、`npm run format:check`，完整故障与性能检查用 `npm run test:nightly`。备份同时保留 `hub.db` 和 `master.key`；后者权限应为 0600。

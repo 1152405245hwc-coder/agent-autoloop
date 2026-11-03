@@ -1,7 +1,11 @@
 // One run's timeline, told from the facts in the log: what set it off, who took it, what it asked and what came of it.
 import type { Fact, Row } from "../kernel/evolve.ts";
 
-const time = (value: string | number) => new Date(value).toISOString().slice(0, 19).replace("T", " ") + " UTC";
+function time(value: string | number) {
+  const date = new Date(value);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
 const eventText = (event: Row) => `来源 ${event.source} · 类型 ${event.type} · 对象 ${event.subject || "无"}`;
 
 export function formatWhy(id: number, facts: Fact[]) {
@@ -53,8 +57,13 @@ export function formatWhy(id: number, facts: Fact[]) {
     if (!before && own && !row.fyi) {
       const options = JSON.parse(row.options) as string[];
       add(row.created_at, `${row.kind === "ask" ? "提问" : "通知"}：${row.title}`);
-      if (row.text) lines.push(`  ${row.text}`);
-      if (options.length) lines.push(`  选项：${options.join(" / ")}`);
+      if (row.text)
+        lines.push(
+          ...String(row.text)
+            .split("\n")
+            .map((line) => `                ${line}`),
+        );
+      if (options.length) lines.push(`                选项：${options.join(" / ")}`);
     }
     if (row.decided_at && row.decided_at !== before?.decided_at && (own || events.has(row.answer_event))) {
       const answer = row.answer ?? JSON.parse(row.options)[row.choice];

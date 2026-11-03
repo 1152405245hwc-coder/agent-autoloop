@@ -1,7 +1,7 @@
 // Keeping it running: launchd on a Mac, systemd on Linux. Both start it at login and restart it if it stops.
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { HOME } from "./home.ts";
@@ -78,6 +78,8 @@ export function installService() {
 }
 
 export function removeService() {
+  const file = process.platform === "darwin" ? plistFile() : unitFile();
+  if (!existsSync(file) || !readFileSync(file, "utf8").includes(xml(PROGRAM))) return;
   if (process.platform === "darwin") {
     spawnSync("launchctl", ["bootout", `${domain()}/${label()}`], { stdio: "ignore" });
     rmSync(plistFile(), { force: true });
@@ -85,6 +87,31 @@ export function removeService() {
     spawnSync("systemctl", ["--user", "disable", "--now", label()], { stdio: "ignore" });
     rmSync(unitFile(), { force: true });
   }
+}
+
+/** The process that left its number in up.pid, if it still is that process: the number may be someone else's by now. */
+export function runningUp() {
+  const file = path.join(HOME, "up.pid");
+  if (!existsSync(file)) return null;
+  const pid = readFileSync(file, "utf8").trim();
+  let command = "";
+  try {
+    command = execFileSync("ps", ["-p", pid, "-o", "command="], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {}
+  return /agent-hub(\.ts)? up\b/.test(command) ? Number(pid) : null;
+}
+
+/** Stopping a service returns before its process is gone, and one started by hand has no service to stop it. */
+export function stopUp() {
+  const pid = runningUp();
+  if (pid === null) return;
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {}
+  for (let tries = 0; tries < 50 && runningUp() !== null; tries++) pause(100);
 }
 
 export function serviceRunning() {

@@ -192,10 +192,19 @@ export function createWorker({
     const argv = adapter.command(turn);
     const { out, err, exit } = files(entry);
     // Output and the exit code go through the shell, so they land in their files even if this program has gone by then.
-    const script = `"$@" >"${out}" 2>"${err}"; echo $? >"${exit}.tmp"; mv "${exit}.tmp" "${exit}"`;
+    const script = [
+      "out=$1",
+      "err=$2",
+      "result=$3",
+      "shift 3",
+      "umask 077",
+      '"$@" >"$out" 2>"$err"',
+      'echo $? >"$result.tmp"',
+      'mv "$result.tmp" "$result"',
+    ].join("\n");
     // The login shell gives it the PATH and sign-in its owner has in a terminal; launchd and systemd give neither.
     const login = [process.env.SHELL ?? "/bin/sh", "-lc", 'exec "$0" "$@"'];
-    const child = spawn("/bin/sh", ["-c", script, marker(entry), ...login, ...argv], {
+    const child = spawn("/bin/sh", ["-c", script, marker(entry), out, err, exit, ...login, ...argv], {
       cwd,
       env: agentEnvironment(entry),
       detached: true,

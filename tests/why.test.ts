@@ -1,6 +1,6 @@
 // Failure modes: why dumps rules or JSON by default; related runs/events leak into the timeline; a question loses its
 // answer or continuation; receipt actions disappear; retry uses the wrong rules version; --json changes the raw facts;
-// a provisional session link is presented after the agent has supplied its real session.
+// local time is replaced by UTC or a year, columns drift; a provisional session link is presented after the agent has supplied its real session.
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { once } from "node:events";
@@ -28,7 +28,7 @@ const cli = async (...args: string[]) =>
     await promisify(execFile)(
       process.execPath,
       ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "../bin/agent-hub.ts"), ...args],
-      { env: process.env },
+      { env: { ...process.env, TZ: "Asia/Taipei" } },
     )
   ).stdout;
 const start = Date.parse("2026-11-03T00:00:00Z");
@@ -76,7 +76,7 @@ test("why prints the real event, rules version, worker, session, receipt, answer
   const continued = hub.claimNext("mac-mini", "second", start + 6000)!;
   const output = await cli("why", String(job.run));
   for (const words of [
-    "2026-11-03 00:00:01 UTC",
+    "11-03 08:00:01",
     "shop",
     "order.created",
     "order-42",

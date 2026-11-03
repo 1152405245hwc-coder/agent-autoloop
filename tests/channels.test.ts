@@ -2,7 +2,7 @@
 // Failure cases: a first send uses a key that changes with the version, or an update sends a new message; a failed send
 // isn't reported; a click that isn't a card's is taken; a card's options don't show while it's open or still show after;
 // the listener dying isn't started again. A GitHub webhook with a bad signature, or with none, is taken; what isn't an
-// identifier reaches the subject; a ping makes an event.
+// identifier reaches the subject; a ping makes an event; replacement tokens in card text rewrite a webhook template.
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -146,7 +146,12 @@ test("a webhook channel posts words and the link once, and has nothing to do for
   });
   await new Promise<void>((resolve) => target.listen(0, "127.0.0.1", resolve));
   const stop = new AbortController();
-  const cards: Card[] = [base, { ...base, version: 2, ref: "sent-5", state: "decided", choice: 0 }, { ...base, id: 7 }];
+  const literal = '$& $` $\' {text} "},"admin":true';
+  const cards: Card[] = [
+    { ...base, text: literal },
+    { ...base, version: 2, ref: "sent-5", state: "decided", choice: 0 },
+    { ...base, id: 7 },
+  ];
   const calls: unknown[][] = [];
   const hub = {
     async nextCard() {
@@ -177,6 +182,7 @@ test("a webhook channel posts words and the link once, and has nothing to do for
   });
   target.close();
   assert.equal(seen.length, 2);
+  assert.equal(seen[0].text.content, `${base.title}\n\n${literal}\n\n1. 删\n2. 留着\n\n${base.link}`);
   assert.match(seen[0].text.content, /要不要删[\s\S]*1\. 删[\s\S]*https:\/\/hub\.test\/c\/x/);
   assert.deepEqual(calls, [
     ["delivered", 5, 1, "sent-5"],

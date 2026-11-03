@@ -1,7 +1,7 @@
 // The command line: what a person, or their Agent, types.
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -9,6 +9,11 @@ import { hubClient } from "../protocol/client.ts";
 import { CONFIG_FILE, readConfig, writeConfig, type Config } from "../host/config.ts";
 import { HOME, RULES_FILE } from "../host/home.ts";
 import { installService, removeService, serviceRunning } from "../host/service.ts";
+import { versionLine } from "../host/version.ts";
+import { spendLine, WEEK, type SpendingRun } from "./spend.ts";
+
+const ROOT = path.join(import.meta.dirname, "..");
+const PROGRAM = path.join(ROOT, "bin", "agent-hub.ts");
 
 const HELP = `Agent 自动化中台
 
@@ -18,7 +23,7 @@ const HELP = `Agent 自动化中台
   agent-hub why <第几轮> [--json]  查看时间线；--json 输出原始事实
   agent-hub conformance <地址> --config <测试凭据文件>
                                     在测试中台上检查协议
-  agent-hub status                  现在什么情况：谁在线、等你什么、在做什么、做过什么
+  agent-hub status                  现在什么情况：谁在线、等你什么、在做什么、做过什么、花了多少
   agent-hub answer <卡片> [序号] [--text 别的想法]
                                     回答一张卡片；通知不用写序号
   agent-hub resolve <卡片> <结果>   这件事不用决定了，写一句结果
@@ -38,6 +43,8 @@ const HELP = `Agent 自动化中台
   agent-hub join <中台地址> --worker <名字> --key <密钥>
                                     另一台电脑只接活时用
   agent-hub update                  更新到最新版
+  agent-hub uninstall [--yes]       卸载程序并保留数据；--yes 跳过确认
+  agent-hub --version               版本和当前提交
   agent-hub up                      启动（平时由系统服务调用）
   agent-hub service install|remove  系统服务
 
@@ -74,7 +81,7 @@ function starterRules(agents: Record<string, object>, first: string) {
   return {
     sources: { local: { name: "本机" } },
     agents,
-    channels: {},
+    channels: { desktop: { name: "桌面通知" } },
     rules: [
       {
         name: "试一下",
@@ -100,8 +107,15 @@ function linkSkill() {
     const link = path.join(homedir(), agent, "skills", "agent-hub");
     if (lstatSync(link, { throwIfNoEntry: false })) continue;
     mkdirSync(path.dirname(link), { recursive: true });
-    symlinkSync(path.join(import.meta.dirname, "..", "skills", "agent-hub"), link);
+    symlinkSync(path.join(ROOT, "skills", "agent-hub"), link);
   }
+}
+
+/** What to type to run this program: its name if that's what a shell finds, otherwise where it is. */
+function howToRun() {
+  const found = spawnSync("/bin/sh", ["-c", "command -v agent-hub"], { encoding: "utf8" }).stdout.trim();
+  if (found && realpathSync(found) === realpathSync(PROGRAM)) return "agent-hub";
+  return /\s/.test(PROGRAM) ? `'${PROGRAM}'` : PROGRAM;
 }
 
 /** What was asked for on the command line, or whichever of the usual Agents is installed. */
@@ -148,12 +162,13 @@ async function init(args: string[]) {
   if (!Object.keys(agents).length) {
     return fail(
       "这台电脑上没找到 Claude Code 或 Codex。先装好并登录，" +
-        "或者用 --command 指定别的命令行 Agent，比如 --command 'hermes chat -Q -q {prompt}'",
+        "或者用 --command 指定别的命令行 Agent，比如 --command 'hermes chat -q {prompt}'",
     );
   }
   const port = text(named.port) ?? "3350";
   const url = `http://127.0.0.1:${port}`;
-  if (!existsSync(RULES_FILE)) {
+  const ownRules = !existsSync(RULES_FILE);
+  if (ownRules) {
     writeFileSync(RULES_FILE, `${JSON.stringify(starterRules(agents, Object.keys(agents)[0]), null, 2)}\n`);
   }
   const { addKey } = await import("../host/runtime.ts");
@@ -163,12 +178,19 @@ async function init(args: string[]) {
     worker: { name: worker, key: addKey("worker", worker) },
     source: { name: "local", key: addKey("source", "local") },
     owner: addKey("owner", "owner"),
+    // A channel only rules.json knows about, or only this file, would do nothing: it's on only if both are ours to write.
+    ...(ownRules && { channels: { desktop: { key: addKey("channel", "desktop") } } }),
   };
   writeConfig(config);
   linkSkill();
   if (!named["no-service"]) installService();
   const names = Object.values(agents).map((agent) => agent.name);
-  console.log(`装好了。\n  Agent：${names.join("、")}\n  规则：${RULES_FILE}\n\n运行 agent-hub try 跑一遍完整流程。`);
+  const reach = ownRules ? "  通道：桌面通知\n" : "";
+  const run = howToRun();
+  const next = named["no-service"]
+    ? `先运行 ${run} up 启动中台，再开一个终端运行 ${run} try 跑一遍完整流程。`
+    : `运行 ${run} try 跑一遍完整流程。`;
+  console.log(`装好了。\n  Agent：${names.join("、")}\n${reach}  规则：${RULES_FILE}\n\n${next}`);
 }
 
 async function join(args: string[]) {
@@ -196,9 +218,7 @@ function showCard(card: Card) {
 }
 
 const howToAnswer = (card: Card) =>
-  card.kind === "ask"
-    ? `回答：agent-hub answer ${card.id} <序号>，或者 agent-hub answer ${card.id} --text '别的想法'`
-    : `处理完了：agent-hub answer ${card.id}`;
+  card.kind === "ask" ? `回答：agent-hub answer ${card.id} <序号>` : `处理完了：agent-hub answer ${card.id}`;
 
 async function chooseAt(terminal: ReturnType<typeof createInterface>, card: Card) {
   for (;;) {
@@ -255,7 +275,7 @@ async function tryIt() {
       return;
     }
   }
-  fail("十分钟没等到结果。运行 agent-hub doctor 看看。");
+  fail("五分钟没等到结果。运行 agent-hub doctor 看看。");
 }
 
 const RUN_STATES: Record<string, string> = {
@@ -267,14 +287,33 @@ const RUN_STATES: Record<string, string> = {
   cancelled: "停了",
 };
 
+/**
+ * The runs of the past week, from what /v1/state gives 60 at a time. The first page also lists anything still in the queue,
+ * however old, so it's the oldest of the page proper (`nextBefore`) that says whether to read back further.
+ */
+async function runsOfTheWeek(owner: ReturnType<typeof ownerClient>, first: any, since: number) {
+  const runs = new Map<number, SpendingRun>(first.runs.map((run: any) => [run.id, run]));
+  let page = first;
+  while (page.nextBefore !== null) {
+    const oldest = page.runs.find((run: any) => run.id === page.nextBefore);
+    if (Date.parse(oldest.createdAt) < since) break;
+    page = await owner.state(page.nextBefore);
+    for (const run of page.runs) runs.set(run.id, run);
+  }
+  return [...runs.values()];
+}
+
 async function status() {
-  const state = await ownerClient().state();
+  const owner = ownerClient();
+  const state = await owner.state();
   const { totals } = state;
   const clock = { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" } as const;
   const at = (iso: string) => new Date(iso).toLocaleString("zh-CN", { timeZone: state.timezone, ...clock });
   console.log(
-    `在跑 ${totals.running} · 排队 ${totals.queued} · 今天做完 ${totals.doneToday} · 等你 ${state.cards.length}\n`,
+    `在跑 ${totals.running} · 排队 ${totals.queued} · 今天做完 ${totals.doneToday} · 等你 ${state.cards.length}`,
   );
+  const now = Date.parse(state.now);
+  console.log(`${spendLine(await runsOfTheWeek(owner, state, now - WEEK), now, state.timezone)}\n`);
   for (const agent of state.agents) console.log(`${agent.online ? "●" : "○"} ${agent.name}（${agent.worker}）`);
   for (const channel of state.channels) console.log(`${channel.online ? "●" : "○"} ${channel.name}`);
   for (const card of state.cards) {
@@ -332,7 +371,7 @@ async function resolve(args: string[]) {
 async function doctor() {
   let bad = 0;
   const say = (ok: boolean, words: string) => {
-    console.log(`${ok ? "✓" : "✗"} ${words}`);
+    console.log(`${ok ? "●" : "○"} ${words}`);
     if (!ok) bad += 1;
   };
   say(Number(process.versions.node.split(".")[0]) >= 24, `Node ${process.versions.node}`);
@@ -369,9 +408,13 @@ async function doctor() {
         }
       }
       for (const channel of state.channels) say(channel.online, `${channel.name}${channel.online ? "在线" : "不在线"}`);
+      const manual = path.join(ROOT, "skills", "agent-hub", "SKILL.md");
       if (!state.channels.length) {
+        console.log(`○ 还没接通道：Agent 问你时不会主动告诉你，要自己运行 agent-hub status 看。接法见 ${manual}`);
+      } else if (state.channels.length === 1 && state.channels[0].id === "desktop") {
         console.log(
-          "· 还没接通道：Agent 问你时不会主动告诉你，要自己运行 agent-hub status 看。接法见 skills/agent-hub/SKILL.md",
+          "○ 只接了桌面通知：Agent 问你时只有这台电脑会弹通知，人不在电脑前、或者电脑没有图形界面就看不到。" +
+            `要发到飞书、钉钉这些地方，接法见 ${manual}`,
         );
       }
     } catch (error) {
@@ -488,11 +531,17 @@ function addPlugin(args: string[]) {
 }
 
 async function update() {
-  const root = path.join(import.meta.dirname, "..");
-  const pulled = spawnSync("git", ["-C", root, "pull", "--ff-only"], { stdio: "inherit" });
+  const pulled = spawnSync("git", ["-C", ROOT, "pull", "--ff-only"], { stdio: "inherit" });
   if (pulled.status !== 0) return fail("更新失败。");
   if (serviceRunning()) installService();
   console.log("更新好了。");
+}
+
+async function askAtTerminal(question: string) {
+  const terminal = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await terminal.question(question);
+  terminal.close();
+  return answer;
 }
 
 const [command, ...args] = process.argv.slice(2);
@@ -515,8 +564,13 @@ const commands: Record<string, () => unknown> = {
   tell: () => tell(args),
   stop: () => stop(args),
   update,
+  uninstall: async () => {
+    const { uninstall } = await import("./uninstall.ts");
+    await uninstall(flags(args).named.yes !== undefined, process.stdin.isTTY ? askAtTerminal : null);
+  },
   service: () => service(args),
   help: () => console.log(HELP),
+  "--version": () => console.log(versionLine()),
 };
 if (!command || !commands[command]) {
   console.log(HELP);

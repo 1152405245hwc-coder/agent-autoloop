@@ -9,7 +9,7 @@ description: 配置 Agent 自动化中台：加规则、接新的事件来源、
 
 ## 看情况、回答
 
-`agent-hub status` 列出谁在线、等用户什么、在做什么、做过什么。`agent-hub answer <卡片> <序号>` 回答，`agent-hub resolve <卡片> <结果>` 结案，`agent-hub stop <第几轮>` 停掉一轮。
+`agent-hub status` 列出谁在线、等用户什么、在做什么、做过什么，还有今天和最近 7 天的轮数、Token 和费用（费用只算 Agent 上报了的，没上报的轮数会写出来）。`agent-hub answer <卡片> <序号>` 回答，`agent-hub resolve <卡片> <结果>` 结案，`agent-hub stop <第几轮>` 停掉一轮。
 
 这里没有网页。用户想要一个页面看全局，就替他写一个：读 `GET /v1/state`，密钥是 `config.json` 的 `owner`，请求见 `docs/protocol.md` 的「本人」一节。
 
@@ -27,6 +27,8 @@ description: 配置 Agent 自动化中台：加规则、接新的事件来源、
 - 同一个对象的事件要分开处理、互不等待，就写 `parallel`。
 - 默认的先问清单是 `askFirst`，用户说什么事必须先问他，就改这里。
 - 用户在别的地方定时跑的任务（Claude、Codex 应用里），写进 `elsewhere`，只在 `agent-hub status` 里列出来；它们要找用户时运行 `agent-hub tell <编号> --task <任务名>`，内容从标准输入传。
+
+用户想接自动化时先从例子改，不要从零写：`examples/recipes/` 里有早报（`morning-brief`）、处理 GitHub issue（`github-issues`）和线上报错（`ops-alerts`），每个都有规则、Skill 和写明权限原因的 README。要写新的 Agent、通道或来源插件，看教程 `docs/plugins.md` 和最小例子 `examples/plugins/`。
 
 ## 写处理手册
 
@@ -62,6 +64,8 @@ ACP 用 `use: "acp"` 和 `command: ["ACP 服务程序"]`，支持 v1 的会话�
 ## 接一个通道
 
 配置在两处：`rules.json` 的 `channels` 登记（`answerers` 是谁能回答），`config.json` 的 `channels` 写密钥和选项。`agent-hub key new channel <名字>` 拿密钥（先问用户）。改了 `config.json` 要 `agent-hub service install` 重启。
+
+**桌面通知**：新装的中台默认开着（`plugins/desktop/channel.ts`），两处各有一个 `desktop`。卡片第一次发送时，macOS 用 `osascript`、Linux 用 `notify-send` 弹一条通知，标题为“Agent 问你一个问题”，正文是卡片标题和“运行 agent-hub status 查看”，不能在通知上回答。没有图形会话时安静跳过，问题仍在；通知命令失败时报告失败，不会让中台退出。接了别的通道可以留着它；不想要就把两处的 `desktop` 都删掉，再重启。以前装的中台不会自动加上它。
 
 **飞书**：用官方的 `lark-cli`。`npm i -g @larksuite/cli`，`lark-cli config init --new` 建一个应用（用户扫码），在开发者后台给应用开机器人能力，并订阅卡片回传交互（长连接）。然后：
 
@@ -145,3 +149,7 @@ MCP 客户端的启动程序填 `node`，参数为本机引擎绝对路径 `bin/
 接插件先在专用测试中台验证：`agent-hub conformance <地址> --config <测试凭据文件>`。文件里的 `keys` 分别放来源、接单程序、通道、本人密钥；`eventType` 匹配测试规则，`answerer` 在测试通道的允许名单内。检查会写事件和卡片，不指向正在用的中台。协议类型在 `protocol/schema.json`。
 
 `kernel/` 不读时钟、不取随机数。`evolve` 更新视图，`commit` 在 WAL + FULL 事务里追加事实，提交后才应答。`agent-hub why 42` 查一轮的事件、规则和回执；`GET /v1/stream?after=42` 供本人客户端按序号续读。备份要一起保留 `hub.db` 和权限为 0600 的 `master.key`；后者推导轮次和卡片链接的 token。普通访问密钥只保存哈希。
+
+## 版本与卸载
+
+`agent-hub --version` 显示版本和提交。`agent-hub uninstall` 确认后删除自身程序、链接和服务，规则、密钥和记录保留；`--yes` 只跳过确认。

@@ -6,7 +6,7 @@ import { accepted, payload } from "./templates.ts";
 import type { Card, ChannelContext } from "../../host/channels.ts";
 
 function fill(template: unknown, text: string): unknown {
-  if (typeof template === "string") return template.replaceAll("{text}", text);
+  if (typeof template === "string") return template.replaceAll("{text}", () => text);
   if (Array.isArray(template)) return template.map((item) => fill(item, text));
   if (template && typeof template === "object") {
     return Object.fromEntries(Object.entries(template).map(([key, value]) => [key, fill(value, text)]));

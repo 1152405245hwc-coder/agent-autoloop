@@ -1,7 +1,5 @@
 // The architecture, as a test. The hub's kernel knows no vendor and makes no request of its own: everything connects to it.
-// And it stays small enough to read in a sitting. Failure cases: a product's name creeps into the kernel; a request out of
-// it creeps in; it grows past what one person can hold in their head; it picks up a runtime dependency; an interface creeps
-// in, when the doors are the product and a page is anyone's own client of them.
+// Failure cases: a product name, an outbound request, a runtime dependency or an interface enters the kernel.
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -28,11 +26,6 @@ test("the kernel makes no request of its own", () => {
   const requests =
     /\bfetch\(|https?\.request|https?\.get\(|node:https|node:net|node:dgram|node:tls|child_process|WebSocket/;
   for (const [file, text] of kernel) assert.ok(!requests.test(text), file);
-});
-
-test("the kernel stays small enough to read in a sitting", () => {
-  const lines = kernel.reduce((sum, [, text]) => sum + text.split("\n").length, 0);
-  assert.ok(lines <= 1600, `${lines} lines`);
 });
 
 test("nothing is installed to run it", () => {

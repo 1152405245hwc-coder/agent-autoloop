@@ -145,6 +145,7 @@ POST /v1/runs/12/result    Authorization: Bearer <token>   Result
 
 - 结果可以重放：响应丢了，同一个 token 再交一次同样的内容，得到同样的确认；内容不同返回 409。
 - `failed` 会重派，所以它只带 `notice`，其余的不生效。
+- `usage` 由接单程序自己上报，每一项都可以没有：`input`、`output`、`cached` 是 Token 数，`cost` 是美元。`agent-hub status` 的成本一行由各轮的 `usage` 算出，没上报的轮数如实写出来。
 - `ask` 的 `key` 范围是这个事项：同一个 `key` 的卡片还开着就不再发。关掉之后再问是新的一次。
 - `resolve` 只能结同来源、同组、这一轮领活前就有的卡片，越界的写进 `rejected`，不影响这一轮的结果。
 - `later` 的 `key` 范围是这个事项，同一个 `key` 再写一次就是改时间。
@@ -221,6 +222,8 @@ POST /v1/runs/12/cancel     {}
 
 `agent-hub status`、`answer`、`resolve`、`stop` 就是这几个请求。`/v1/state` 一次给最近 60 轮，`?before=<nextBefore>` 翻更早的。
 
+安装与卸载不改变 HTTP 协议。`agent-hub --version` 显示包版本与提交；`agent-hub uninstall` 确认后移除自身程序、链接和服务，始终保留规则、密钥和记录；`--yes` 只跳过确认。
+
 ## 失败时会怎样
 
 | 出了什么事 | 会怎样 |
@@ -265,7 +268,7 @@ Node 请求转换层保持在 50 行内；文件、SQLite、监听和定时器�
 
 `GET /v1/stream?after=42` 仅接受本人的密钥，返回 SSE：`id` 是日志序号，`event: fact`，`data` 是事实 JSON。断线用 `Last-Event-ID` 或 `after` 从下一条继续；从 0 读全量。不给订阅者发送密钥哈希或能力凭据。
 
-`GET /v1/runs/42/why` 仅接受本人的密钥，返回与本轮事件、每次执行的规则版本、领取、回执、卡片回答有关的事实。命令行 `agent-hub why 42` 使用同一接口，默认显示事件、规则版本、领取者、起止时间、会话、回执、回答和接续轮次的时间线，不打印规则正文；`agent-hub why 42 --json` 输出原始事实。这些接口沿用本人的访问权限。内部回答和定时事件遇到已存在的编号时按序加后缀，保持来源与编号唯一，不覆盖来源的事件。
+`GET /v1/runs/42/why` 仅接受本人的密钥，返回与本轮事件、每次执行的规则版本、领取、回执、卡片回答有关的事实。命令行 `agent-hub why 42` 使用同一接口，时间按本机时区显示为 `MM-DD HH:mm:ss`，默认显示事件、规则版本、领取者、起止时间、会话、回执、回答和接续轮次的时间线，不打印规则正文；`agent-hub why 42 --json` 输出原始事实。这些接口沿用本人的访问权限。内部回答和定时事件遇到已存在的编号时按序加后缀，保持来源与编号唯一，不覆盖来源的事件。
 
 ## 一致性和复现
 
@@ -297,6 +300,8 @@ Node 请求转换层保持在 50 行内；文件、SQLite、监听和定时器�
 
 Webhook 通道的 `config.json` 配置使用 `use: "webhook"`、`url` 和 `platform`，后者可选 `dingtalk`、`wecom`、`slack`、`discord`。不写 platform 时可用 `body` 自定义模板，字符串里的 `{text}` 替换为卡片内容。四个模板对照官方文档：[钉钉](https://open.dingtalk.com/document/orgapp/custom-bot-send-message-type)、[企微](https://developer.work.weixin.qq.com/document/path/91770)、[Slack](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/)、[Discord](https://discord.com/developers/docs/resources/webhook#execute-webhook)。钉钉和企微检查响应的 `errcode`，Slack 检查 `ok`；Discord 禁止文字触发提及。超过企微 2048 字节或 Discord 2000 字的卡片会报告失败，不截断问题或回答链接。Webhook 本身没有幂等保证，消息发送成功但报告丢失时可能重发。
 
+桌面通知 `desktop` 是新安装默认打开的通道：macOS 用 `osascript`，Linux 用 `notify-send`。通知标题是“Agent 问你一个问题”，正文是卡片标题和“运行 agent-hub status 查看”；文字通过 `--` 后的参数传入，不拼进脚本。没有图形会话时不调用通知程序，报告 `skipped-<卡片编号>`，不反复打扰；卡片仍可通过命令行查看和回答。有图形会话但通知命令不存在或失败时报告 `failed`，由中台安排重试。卡片更新只报告，不重复弹出。
+
 `examples/worker.sh` 和 `examples/channel.sh` 只用 shell 内置命令、curl、jq。设置 `AGENT_HUB_URL`、`AGENT_HUB_KEY` 后运行；`AGENT_HUB_ONCE=1` 只领一次。接单示例交回 `AGENT_HUB_RECEIPT` 中的 JSON，默认交回完成；通道示例把卡片输出到终端，再报告送达。它们是短任务示例，不适合长任务；长任务使用 `worker/` 的心跳、停止和恢复。`tests/examples.test.ts` 在通过协议一致性检查的临时中台上实际运行两个脚本，覆盖提问、送达、回答、继续和错误密钥。
 
 ## 结构与预算
@@ -316,7 +321,6 @@ Webhook 通道的 `config.json` 配置使用 `use: "webhook"`、`url` 和 `platf
 | 检查 | 上限或下限 |
 |---|---|
 | Node 运行时依赖 | 0 |
-| 内核行数 | ≤1600（包含空行、注释） |
 | 冷启动到监听 | ≤150 ms |
 | 启动后空闲 1 秒 RSS | ≤60 MB；负载 RSS 单列观测 |
 | 逐条 HTTP 提交、落盘后应答 | ≥2000 条/秒 |
@@ -351,3 +355,4 @@ Webhook 通道的 `config.json` 配置使用 `use: "webhook"`、`url` 和 `platf
 Ship 使用本引擎仓库的 `plugins/delivery/action.yml`，项目固定到发布后的完整提交。Action 只输出 `release` 和 `superseded`，项目已有发布步骤根据输出运行。它与交付进程共用 `project.ts` 的范围与健康判断，不在项目里长期复制工具。
 
 普通健康 URL 只允许 HTTPS。测试时必须显式传 `--test-local-health`，Action 同样要 `test-local-health: 'true'`，才接受 `http://127.0.0.1`；不接受其他 HTTP 地址。GitHub 合并规则由项目维护者设置。
+

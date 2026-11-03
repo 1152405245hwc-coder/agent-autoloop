@@ -3,7 +3,8 @@
 // the agent goes on and finishes. Failure cases: init leaves something out; `up` doesn't start, or starts twice; the run isn't
 // started in its folder; the question doesn't reach the owner; `status` doesn't show what to do about it; the answer doesn't
 // wake the thread; the result isn't recorded; `try` hangs for an answer when nobody's at a terminal, as when an Agent runs it;
-// the user's Agents aren't told how to set it up, or something of the user's own is overwritten doing so, or a test install does it.
+// the user's Agents aren't told how to set it up, or something of the user's own is overwritten doing so, or a test install does it;
+// the question doesn't show on the desktop, shows again once answered, or a test run puts up a real notification.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import {
@@ -25,7 +26,22 @@ import { after, test } from "node:test";
 
 const home = mkdtempSync(join(tmpdir(), "agent-hub-loop-"));
 const bin = join(import.meta.dirname, "..", "bin", "agent-hub.ts");
-const env: NodeJS.ProcessEnv = { ...process.env, AGENT_HUB_HOME: home };
+// `init` turns on the desktop channel: these stand in for the commands that would really show something.
+const notifiers = join(home, "notifiers");
+const notified = join(home, "notified.txt");
+mkdirSync(notifiers);
+writeFileSync(join(notifiers, "launchctl"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+for (const name of ["osascript", "notify-send"]) {
+  const recordTitle = `while [ "$1" != "--" ]; do shift; done\nprintf '%s\\n' "$3" >> "${notified}"\n`;
+  writeFileSync(join(notifiers, name), `#!/bin/sh\n${recordTitle}`);
+  chmodSync(join(notifiers, name), 0o755);
+}
+const env: NodeJS.ProcessEnv = {
+  ...process.env,
+  AGENT_HUB_HOME: home,
+  DISPLAY: ":99",
+  PATH: `${notifiers}:${process.env.PATH}`,
+};
 delete env.AGENT_HUB_RULES;
 delete env.AGENT_HUB_PUBLIC_URL;
 const cli = (...args: string[]) =>
@@ -147,6 +163,11 @@ test("one machine, one command: an event, a question, an answer, the work done",
   assert.equal(finished.recentCards[0].state, "done");
   assert.equal(finished.recentCards[0].result, "你选了绿色，做完了");
   assert.equal(finished.recentCards[0].by, "本人");
+  assert.deepEqual(
+    readFileSync(notified, "utf8").trim().split("\n"),
+    ["试跑：选一个颜色", "运行 agent-hub status 查看"],
+    "once, and not for the answer",
+  );
   assert.match(cli("answer", String(card.id), "1").stdout, /已经/);
 
   const status = cli("status");

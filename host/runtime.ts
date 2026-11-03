@@ -113,9 +113,7 @@ if (!rules) throw new Error(initial.problem ?? "缺少规则");
 
 export const ruleNamed = (name: string) => rules.rules.find((rule) => rule.name === name);
 export const rulesFor = (source: string, type: string) =>
-  rules.rules.filter(
-    (rule) => eventRule(rule) && rule.when.source === source && typeMatches(rule.when.types, type),
-  );
+  rules.rules.filter((rule) => eventRule(rule) && rule.when.source === source && typeMatches(rule.when.types, type));
 export const workers = () => [...new Set(Object.values(rules.agents).map((agent) => agent.worker))];
 export const agentsOf = (worker: string) => query.agentsOf(getView(), worker);
 export const limitOf = (group: string) => rules.rules.find((rule) => rule.group === group)?.parallel ?? 1;
