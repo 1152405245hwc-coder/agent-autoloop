@@ -1,146 +1,110 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1040" role="img" aria-labelledby="t">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 660" role="img" aria-labelledby="t">
 <title id="t">Agent 自动化中台架构图</title>
 <defs>
 <style>
-svg{--bg:#faf9f5;--ink:#1d1c19;--muted:#6e6b64;--line:#cfccc4;--card:#fff;--hub:#f1eee6;--accent:#c2491d}
-@media (prefers-color-scheme:dark){svg{--bg:#151412;--ink:#f1efe9;--muted:#a29e95;--line:#45433d;--card:#1e1d1a;--hub:#272520;--accent:#ef8a62}}
+svg{--bg:#faf9f5;--ink:#1d1c19;--muted:#6e6b64;--line:#d6d3cb;--card:#fff;--item:#faf9f5;--hub:#f1eee6;--accent:#c2491d}
+@media (prefers-color-scheme:dark){svg{--bg:#151412;--ink:#f1efe9;--muted:#a29e95;--line:#45433d;--card:#1e1d1a;--item:#262420;--hub:#272520;--accent:#ef8a62}}
 text{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:14px;fill:var(--ink)}
-.h1{font-size:26px;font-weight:600}
-.h2{font-size:17px;font-weight:600}
+.h1{font-size:20px;font-weight:600}
+.h2{font-size:16px;font-weight:600}
 .h3{font-size:15px;font-weight:600}
 .s{font-size:12.5px;fill:var(--muted)}
-.r{font-size:13px}
+.r{font-size:13.5px}
 .m{font-family:ui-monospace,SFMono-Regular,Menlo,"PingFang SC",monospace;font-size:13.5px}
-.c{text-anchor:middle}
 .l{font-size:13px;font-weight:600;fill:var(--accent)}
 .bg{fill:var(--bg)}
 .box{fill:var(--card);stroke:var(--line)}
+.item{fill:var(--item);stroke:var(--line)}
 .hub{fill:var(--hub);stroke:var(--ink);stroke-width:1.6}
-.dash{fill:none;stroke:var(--muted);stroke-dasharray:5 4}
 .conn{fill:none;stroke:var(--accent);stroke-width:2;marker-end:url(#a)}
 .flow{fill:none;stroke:var(--muted);stroke-width:1.2;marker-end:url(#b)}
 </style>
 <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--accent)"/></marker>
 <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--muted)"/></marker>
 </defs>
-<rect class="bg" width="1280" height="1040"/>
-
-<text class="h1" x="40" y="56">Agent 自动化中台</text>
-<text class="s" x="40" y="84" style="font-size:14px">一个进程、一个 SQLite 文件、一个规则文件。所有连接都由外向内，内核不发任何对外请求。</text>
-
-<text class="h3" x="40" y="124">Apple M5 Pro 实测</text>
-<text class="s" x="40" y="148">0 个运行时依赖 · 内核 ≤ 1600 行</text>
-<text class="s" x="40" y="170">冷启动 82.74 ms · 空闲 59.71 MB</text>
-<text class="s" x="40" y="192">2411 条/秒 · 派活 p99 1.18 ms</text>
-
-<text class="h3" x="970" y="124">四个设计</text>
-<text class="s" x="970" y="148">一条日志：状态能重建，因果能追溯</text>
-<text class="s" x="970" y="170">确定性内核：能模拟，能穷举，能复现</text>
-<text class="s" x="970" y="192">一个定时器：空闲时什么都不做</text>
-<text class="s" x="970" y="214">一份协议：任何语言都能接</text>
-
-<!-- Clients -->
-<rect class="box" x="340" y="106" width="600" height="92" rx="12"/>
-<text class="h2" x="360" y="132">客户端</text>
-<text class="s" x="420" y="132">看全局、回答、结案、停止</text>
-<rect class="box" x="360" y="144" width="120" height="38" rx="8"/><text class="r c" x="420" y="168">命令行</text>
-<rect class="box" x="490" y="144" width="80" height="38" rx="8"/><text class="r c" x="530" y="168">MCP</text>
-<rect class="box" x="580" y="144" width="190" height="38" rx="8"/><text class="r c" x="675" y="168">你自己写的客户端</text>
-<rect class="box" x="780" y="144" width="140" height="38" rx="8"/><text class="r c" x="850" y="168">任何语言的脚本</text>
-<path class="conn" d="M640 198V260"/>
-<text class="l" x="652" y="235">GET /v1/state · /v1/stream</text>
-
-<!-- Hub -->
-<rect class="hub" x="400" y="262" width="480" height="380" rx="16"/>
-<text class="h2" x="424" y="296" style="font-size:20px">中台</text>
-<text class="s" x="474" y="296">内核 ≤ 1600 行 · 零依赖 · 崩溃后直接恢复</text>
-<rect class="box" x="424" y="310" width="432" height="44" rx="8"/>
-<text class="m c" x="640" y="337">门：handle(Request) → Response</text>
-<path class="flow" d="M640 354V377"/>
-<rect class="box" x="424" y="378" width="432" height="58" rx="8"/>
-<text class="m c" x="640" y="402">decide(视图, 输入, 时间) → 事实</text>
-<text class="s c" x="640" y="424">确定性：不发请求、不读时钟、不用随机数</text>
-<path class="flow" d="M528 436V457"/>
-<text class="s" x="540" y="451">一个事务</text>
-<rect class="box" x="424" y="458" width="208" height="70" rx="8"/>
-<text class="h3" x="440" y="484">日志</text>
-<text class="s" x="440" y="508">事实只追加，唯一的真相</text>
-<path class="flow" d="M632 493H647"/>
-<rect class="box" x="648" y="458" width="208" height="70" rx="8"/>
-<text class="h3" x="664" y="484">视图</text>
-<text class="s" x="664" y="508">evolve 维护，随时可重建</text>
-<rect class="box" x="424" y="542" width="432" height="40" rx="8"/>
-<text class="r c" x="640" y="567">一个定时器：cron、later、重试、租约都在一张到期表</text>
-<path class="flow" d="M424 562H412V407H423"/>
-<rect class="box" x="424" y="592" width="432" height="36" rx="8"/>
-<text class="r c" x="640" y="615">rules.json：规则改动也是一条事实</text>
-
-<!-- Sources -->
-<rect class="box" x="40" y="262" width="270" height="380" rx="12"/>
-<text class="h2" x="60" y="296">来源</text>
-<text class="s" x="104" y="296">把世界变成事件</text>
-<rect class="box" x="60" y="312" width="230" height="66" rx="8"/>
-<text x="76" y="339">你的系统</text><text class="s" x="76" y="361">POST /v1/events</text>
-<rect class="box" x="60" y="390" width="230" height="66" rx="8"/>
-<text x="76" y="417">别人家的 Webhook</text><text class="s" x="76" y="439">一个验签、翻译的函数</text>
-<rect class="box" x="60" y="468" width="230" height="66" rx="8"/>
-<text x="76" y="495">定时</text><text class="s" x="76" y="517">规则里写 cron，错过只补一次</text>
-<rect class="box" x="60" y="546" width="230" height="66" rx="8"/>
-<text x="76" y="573">轮询脚本</text><text class="s" x="76" y="595">没有新东西不花 Token</text>
-<path class="conn" d="M310 452H398"/>
-<text class="l c" x="355" y="440">事件</text>
-
-<!-- Worker and agents -->
-<rect class="box" x="970" y="262" width="270" height="170" rx="12"/>
-<text class="h2" x="990" y="296">接单程序</text>
-<text class="s" x="1066" y="296">每台电脑一个</text>
-<text class="r" x="990" y="326">领活，启动 Agent，盯到结束</text>
-<text class="r" x="990" y="352">回答来了接回原会话</text>
-<text class="r" x="990" y="378">回执写错只重写回执</text>
-<text class="r" x="990" y="404">随时可杀，重启后接着盯</text>
-<path class="conn" d="M970 347H882"/>
-<text class="l c" x="925" y="335">领活 · 交回执</text>
-<path class="flow" d="M1105 432V471"/>
-<text class="s" x="1116" y="456">启动，读最后一条消息</text>
-<rect class="box" x="970" y="472" width="270" height="170" rx="12"/>
-<text class="h2" x="990" y="504">Agent</text>
-<text class="s" x="1046" y="504">就是一个进程</text>
-<text class="r" x="990" y="532">Claude Code、Codex：自带插件</text>
-<text class="r" x="990" y="558">ACP v1：通用插件</text>
-<text class="r" x="990" y="584">command：任何能打印结果的程序</text>
-<text class="r" x="990" y="606">delivery：审查、合并、发布、核实</text>
-
-<!-- Channels and owner -->
-<rect class="box" x="340" y="702" width="600" height="92" rx="12"/>
-<text class="h2" x="360" y="728">通道</text>
-<text class="s" x="404" y="728">把卡片送到你面前</text>
-<rect class="box" x="360" y="740" width="70" height="38" rx="8"/><text class="r c" x="395" y="764">飞书</text>
-<rect class="box" x="440" y="740" width="210" height="38" rx="8"/><text class="r c" x="545" y="764">钉钉、企微、Slack、Discord</text>
-<rect class="box" x="660" y="740" width="110" height="38" rx="8"/><text class="r c" x="715" y="764">卡片链接</text>
-<rect class="box" x="780" y="740" width="140" height="38" rx="8"/><text class="r c" x="850" y="764">其他：按协议接入</text>
-<path class="conn" d="M640 702V644"/>
-<text class="l" x="652" y="677">领卡片 · 转回答（回答也是一条事件）</text>
-<path class="flow" d="M941 748H1009" style="marker-start:url(#b)"/>
-<rect class="box" x="1010" y="718" width="110" height="60" rx="30"/>
-<text class="h2 c" x="1065" y="754">你</text>
-<text class="s c" x="1065" y="800">只在要判断时被打扰</text>
-
-<!-- Simulator -->
-<rect class="dash" x="40" y="702" width="270" height="92" rx="12"/>
-<text class="h3" x="60" y="730">模拟器</text>
-<text class="s" x="60" y="752">同一份内核，虚拟时钟，注入故障</text>
-<text class="s" x="60" y="774">20 万步 · 40320 种顺序 · 日志重放</text>
-<path class="dash" d="M290 702L412 640"/>
-
-<rect class="box" x="40" y="844" width="1200" height="142" rx="12"/>
-<text class="h2" x="60" y="876">交付插件</text>
-<text class="s" x="164" y="876">设置来自 main · PR 只生成文字快照 · 并发与失败交给中台</text>
-<text class="m c" x="180" y="918">deliver 标签</text>
-<text class="m c" x="398" y="918">只读审查</text>
-<text class="m c" x="616" y="918">完整检查 · 合并</text>
-<text class="m c" x="834" y="918">Ship Action</text>
-<text class="m c" x="1092" y="918">健康版本核实</text>
-<path class="flow" d="M250 913H325"/><path class="flow" d="M465 913H525"/><path class="flow" d="M711 913H763"/><path class="flow" d="M910 913H1000"/>
-<text class="s" x="60" y="962">ops/delivery.json · delivery / 可配置的审查状态 · 不在接单电脑执行 PR 代码或设置</text>
-<text class="s" x="40" y="1020">粗箭头是谁连谁：来源、接单程序、通道、客户端都主动连中台，你的电脑不用开放任何端口。</text>
+<rect class="bg" x="0" y="0" width="960" height="660" rx="18"/>
+<rect class="box" x="250" y="24" width="460" height="92" rx="12"/>
+<text x="270" y="52" class="h2">客户端</text>
+<text x="324" y="52" class="s">看全局、回答、停止</text>
+<rect class="item" x="270" y="64" width="120" height="36" rx="8"/>
+<text x="330.0" y="87.0" class="r" text-anchor="middle">命令行</text>
+<rect class="item" x="400" y="64" width="90" height="36" rx="8"/>
+<text x="445.0" y="87.0" class="r" text-anchor="middle">MCP</text>
+<rect class="item" x="500" y="64" width="190" height="36" rx="8"/>
+<text x="595.0" y="87.0" class="r" text-anchor="middle">你自己的页面</text>
+<path class="conn" d="M480 116V168"/>
+<text x="494" y="148" class="l">看全局 · 订阅日志</text>
+<rect class="hub" x="290" y="170" width="380" height="336" rx="16"/>
+<text x="314" y="204" class="h1">中台</text>
+<text x="366" y="204" class="s">零依赖 · 崩溃后直接恢复</text>
+<rect class="box" x="314" y="218" width="332" height="40" rx="8"/>
+<text x="480" y="243" class="m" text-anchor="middle">门：handle(Request) → Response</text>
+<path class="flow" d="M480 258V277"/>
+<rect class="box" x="314" y="278" width="332" height="62" rx="8"/>
+<text x="480" y="304" class="m" text-anchor="middle">decide(视图, 输入, 时间) → 事实</text>
+<text x="480" y="326" class="s" text-anchor="middle">不发请求、不读时钟、不用随机数</text>
+<path class="flow" d="M396 340V359"/>
+<text x="406" y="354" class="s">一个事务</text>
+<rect class="box" x="314" y="360" width="158" height="62" rx="8"/>
+<text x="330" y="386" class="h3">日志</text>
+<text x="330" y="408" class="s">事实只追加</text>
+<path class="flow" d="M472 391H487"/>
+<rect class="box" x="488" y="360" width="158" height="62" rx="8"/>
+<text x="504" y="386" class="h3">视图</text>
+<text x="504" y="408" class="s">随时可重建</text>
+<rect class="box" x="314" y="434" width="332" height="56" rx="8"/>
+<text x="480" y="458" class="h3" text-anchor="middle">一个定时器</text>
+<text x="480" y="478" class="s" text-anchor="middle">cron、复查、重试都在一张到期表</text>
+<path class="flow" d="M314 462H302V309H313"/>
+<rect class="box" x="20" y="170" width="190" height="336" rx="12"/>
+<text x="38" y="204" class="h2">来源</text>
+<rect class="item" x="36" y="220" width="158" height="62" rx="8"/>
+<text x="48" y="246">你的系统</text>
+<text x="48" y="266" class="s">POST /v1/events</text>
+<rect class="item" x="36" y="290" width="158" height="62" rx="8"/>
+<text x="48" y="316">别人家的 Webhook</text>
+<text x="48" y="336" class="s">验签、翻译成事件</text>
+<rect class="item" x="36" y="360" width="158" height="62" rx="8"/>
+<text x="48" y="386">定时</text>
+<text x="48" y="406" class="s">规则里写 cron</text>
+<rect class="item" x="36" y="430" width="158" height="62" rx="8"/>
+<text x="48" y="456">轮询脚本</text>
+<text x="48" y="476" class="s">没新东西不花 Token</text>
+<path class="conn" d="M210 338H288"/>
+<text x="249" y="326" class="l" text-anchor="middle">事件</text>
+<rect class="box" x="750" y="170" width="190" height="150" rx="12"/>
+<text x="768" y="204" class="h2">接单程序</text>
+<text x="768" y="224" class="s">每台电脑一个，只往外连</text>
+<text x="768" y="250" class="r">启动 Agent，盯到结束</text>
+<text x="768" y="274" class="r">回答来了接回原会话</text>
+<text x="768" y="298" class="r">随时可杀，重启接着盯</text>
+<path class="conn" d="M750 275H672"/>
+<text x="711" y="243" class="l" text-anchor="middle">领活</text>
+<text x="711" y="261" class="l" text-anchor="middle">交回执</text>
+<path class="flow" d="M845 321V355" style="marker-start:url(#b)"/>
+<text x="835" y="343" class="s" text-anchor="end">提示词</text>
+<text x="855" y="343" class="s">最后一条消息</text>
+<rect class="box" x="750" y="356" width="190" height="150" rx="12"/>
+<text x="768" y="390" class="h2">Agent</text>
+<text x="768" y="410" class="s">就是一个进程</text>
+<text x="768" y="438" class="r">Claude Code、Codex</text>
+<text x="768" y="462" class="r">任何 ACP Agent</text>
+<text x="768" y="486" class="r">任何能打印结果的命令行</text>
+<rect class="box" x="190" y="548" width="580" height="92" rx="12"/>
+<text x="210" y="574" class="h2">通道</text>
+<text x="256" y="574" class="s">把卡片送到你面前</text>
+<rect class="item" x="210" y="586" width="96" height="38" rx="8"/>
+<text x="258.0" y="610.0" class="r" text-anchor="middle">桌面通知</text>
+<rect class="item" x="314" y="586" width="66" height="38" rx="8"/>
+<text x="347.0" y="610.0" class="r" text-anchor="middle">飞书</text>
+<rect class="item" x="388" y="586" width="216" height="38" rx="8"/>
+<text x="496.0" y="610.0" class="r" text-anchor="middle">钉钉、企微、Slack、Discord</text>
+<rect class="item" x="612" y="586" width="138" height="38" rx="8"/>
+<text x="681.0" y="610.0" class="r" text-anchor="middle">卡片链接</text>
+<path class="conn" d="M480 548V508"/>
+<text x="494" y="533" class="l">领卡片 · 转回答（回答也是一条事件）</text>
+<path class="flow" d="M771 594H823" style="marker-start:url(#b)"/>
+<rect class="box" x="824" y="564" width="100" height="60" rx="30"/>
+<text x="874" y="600" class="h2" text-anchor="middle">你</text>
+<text x="874" y="644" class="s" text-anchor="middle">只在要判断时被打扰</text>
 </svg>

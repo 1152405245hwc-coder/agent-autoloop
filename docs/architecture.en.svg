@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 660" role="img" aria-labelledby="t">
+<title id="t">Agent Hub architecture</title>
+<defs>
+<style>
+svg{--bg:#faf9f5;--ink:#1d1c19;--muted:#6e6b64;--line:#d6d3cb;--card:#fff;--item:#faf9f5;--hub:#f1eee6;--accent:#c2491d}
+@media (prefers-color-scheme:dark){svg{--bg:#151412;--ink:#f1efe9;--muted:#a29e95;--line:#45433d;--card:#1e1d1a;--item:#262420;--hub:#272520;--accent:#ef8a62}}
+text{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:14px;fill:var(--ink)}
+.h1{font-size:20px;font-weight:600}
+.h2{font-size:16px;font-weight:600}
+.h3{font-size:15px;font-weight:600}
+.s{font-size:12.5px;fill:var(--muted)}
+.r{font-size:13.5px}
+.m{font-family:ui-monospace,SFMono-Regular,Menlo,"PingFang SC",monospace;font-size:13.5px}
+.l{font-size:13px;font-weight:600;fill:var(--accent)}
+.bg{fill:var(--bg)}
+.box{fill:var(--card);stroke:var(--line)}
+.item{fill:var(--item);stroke:var(--line)}
+.hub{fill:var(--hub);stroke:var(--ink);stroke-width:1.6}
+.conn{fill:none;stroke:var(--accent);stroke-width:2;marker-end:url(#a)}
+.flow{fill:none;stroke:var(--muted);stroke-width:1.2;marker-end:url(#b)}
+</style>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--accent)"/></marker>
+<marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--muted)"/></marker>
+</defs>
+<rect class="bg" x="0" y="0" width="960" height="660" rx="18"/>
+<rect class="box" x="250" y="24" width="460" height="92" rx="12"/>
+<text x="270" y="52" class="h2">Clients</text>
+<text x="344" y="52" class="s">See everything, answer, stop</text>
+<rect class="item" x="270" y="64" width="120" height="36" rx="8"/>
+<text x="330.0" y="87.0" class="r" text-anchor="middle">Command line</text>
+<rect class="item" x="400" y="64" width="90" height="36" rx="8"/>
+<text x="445.0" y="87.0" class="r" text-anchor="middle">MCP</text>
+<rect class="item" x="500" y="64" width="190" height="36" rx="8"/>
+<text x="595.0" y="87.0" class="r" text-anchor="middle">Your own page</text>
+<path class="conn" d="M480 116V168"/>
+<text x="494" y="148" class="l">state · log stream</text>
+<rect class="hub" x="290" y="170" width="380" height="336" rx="16"/>
+<text x="314" y="204" class="h1">Hub</text>
+<text x="362" y="204" class="s">No dependencies · crash and resume</text>
+<rect class="box" x="314" y="218" width="332" height="40" rx="8"/>
+<text x="480" y="243" class="m" text-anchor="middle">handle(Request) → Response</text>
+<path class="flow" d="M480 258V277"/>
+<rect class="box" x="314" y="278" width="332" height="62" rx="8"/>
+<text x="480" y="304" class="m" text-anchor="middle">decide(view, input, now) → facts</text>
+<text x="480" y="326" class="s" text-anchor="middle">No requests, no clock, no randomness</text>
+<path class="flow" d="M396 340V359"/>
+<text x="406" y="354" class="s">one transaction</text>
+<rect class="box" x="314" y="360" width="158" height="62" rx="8"/>
+<text x="330" y="386" class="h3">Log</text>
+<text x="330" y="408" class="s">Facts, append-only</text>
+<path class="flow" d="M472 391H487"/>
+<rect class="box" x="488" y="360" width="158" height="62" rx="8"/>
+<text x="504" y="386" class="h3">Views</text>
+<text x="504" y="408" class="s">Rebuilt any time</text>
+<rect class="box" x="314" y="434" width="332" height="56" rx="8"/>
+<text x="480" y="458" class="h3" text-anchor="middle">One timer</text>
+<text x="480" y="478" class="s" text-anchor="middle">cron, follow-ups and retries in one table</text>
+<path class="flow" d="M314 462H302V309H313"/>
+<rect class="box" x="20" y="170" width="190" height="336" rx="12"/>
+<text x="38" y="204" class="h2">Sources</text>
+<rect class="item" x="36" y="220" width="158" height="62" rx="8"/>
+<text x="48" y="246">Your systems</text>
+<text x="48" y="266" class="s">POST /v1/events</text>
+<rect class="item" x="36" y="290" width="158" height="62" rx="8"/>
+<text x="48" y="316">Their webhooks</text>
+<text x="48" y="336" class="s">Verified, translated</text>
+<rect class="item" x="36" y="360" width="158" height="62" rx="8"/>
+<text x="48" y="386">Time</text>
+<text x="48" y="406" class="s">cron in a rule</text>
+<rect class="item" x="36" y="430" width="158" height="62" rx="8"/>
+<text x="48" y="456">Polling scripts</text>
+<text x="48" y="476" class="s">No news, no tokens</text>
+<path class="conn" d="M210 338H288"/>
+<text x="249" y="326" class="l" text-anchor="middle">events</text>
+<rect class="box" x="750" y="170" width="190" height="150" rx="12"/>
+<text x="768" y="204" class="h2">Worker</text>
+<text x="768" y="224" class="s">One per machine, out only</text>
+<text x="768" y="250" class="r">Starts it, follows it</text>
+<text x="768" y="274" class="r">Resumes on answers</text>
+<text x="768" y="298" class="r">Safe to kill any time</text>
+<path class="conn" d="M750 275H672"/>
+<text x="711" y="243" class="l" text-anchor="middle">work</text>
+<text x="711" y="261" class="l" text-anchor="middle">receipts</text>
+<path class="flow" d="M845 321V355" style="marker-start:url(#b)"/>
+<text x="835" y="343" class="s" text-anchor="end">prompt</text>
+<text x="855" y="343" class="s">last message</text>
+<rect class="box" x="750" y="356" width="190" height="150" rx="12"/>
+<text x="768" y="390" class="h2">Agent</text>
+<text x="768" y="410" class="s">Just a process</text>
+<text x="768" y="438" class="r">Claude Code, Codex</text>
+<text x="768" y="462" class="r">Any ACP agent</text>
+<text x="768" y="486" class="r">Any CLI that prints</text>
+<rect class="box" x="190" y="548" width="580" height="92" rx="12"/>
+<text x="210" y="574" class="h2">Channels</text>
+<text x="294" y="574" class="s">Cards to wherever you are</text>
+<rect class="item" x="210" y="586" width="84" height="38" rx="8"/>
+<text x="252.0" y="610.0" class="r" text-anchor="middle">Desktop</text>
+<rect class="item" x="302" y="586" width="74" height="38" rx="8"/>
+<text x="339.0" y="610.0" class="r" text-anchor="middle">Feishu</text>
+<rect class="item" x="384" y="586" width="250" height="38" rx="8"/>
+<text x="509.0" y="610.0" class="r" text-anchor="middle">DingTalk, WeCom, Slack, Discord</text>
+<rect class="item" x="642" y="586" width="108" height="38" rx="8"/>
+<text x="696.0" y="610.0" class="r" text-anchor="middle">Card link</text>
+<path class="conn" d="M480 548V508"/>
+<text x="494" y="533" class="l">cards out · answers in (an answer is an event)</text>
+<path class="flow" d="M771 594H823" style="marker-start:url(#b)"/>
+<rect class="box" x="824" y="564" width="100" height="60" rx="30"/>
+<text x="874" y="600" class="h2" text-anchor="middle">You</text>
+<text x="874" y="644" class="s" text-anchor="middle">Only when it takes you</text>
+</svg>
