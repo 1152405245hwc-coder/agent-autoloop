@@ -117,14 +117,14 @@ node sim/crash.ts 1000 12648430
 
 ## Measurements
 
-Apple M5 Pro, 24 GB, Node 24.21.0; reproduce with `npm run benchmark`. Each write is a separate HTTP request, acknowledged after its transaction is durable.
+HTTP hub process on Apple M5 Pro, 24 GB, Node 24.21.0; reproduce with `npm run benchmark`. Each write is a separate HTTP request, acknowledged after its transaction is durable.
 
 | Metric | Measured |
 |---|---:|
-| Cold start | 81.42 ms |
-| Idle memory | 59.77 MB RSS |
-| Durable writes | 3,054 events/s |
-| Dispatch p99 | 1.14 ms |
+| Cold start | 78.12 ms |
+| Idle memory | 59.97 MB RSS |
+| Durable writes | 3,262 events/s |
+| Dispatch p99 | 1.10 ms |
 | Kernel lines | 1,405 |
 | Runtime dependencies | 0 |
 
