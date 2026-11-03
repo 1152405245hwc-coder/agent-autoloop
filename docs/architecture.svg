@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 588" role="img" aria-labelledby="t">
-<title id="t">Agent 自动化中台架构图：内核在中间，其他都是插件</title>
+<title id="t">Agent Autoloop 架构图：内核在中间，其他都是插件</title>
 <defs>
 <style>
 svg{--bg:#faf9f5;--ink:#1d1c19;--muted:#6e6b64;--line:#d6d3cb;--card:#fff;--item:#f4f2ec;--accent:#c2491d;--core:#1d1c19;--core-ink:#faf9f5;--core-chip:#2f2d28;--core-sub:#b9b5ab;--core-accent:#ef8a62}
@@ -16,7 +16,8 @@ text{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
 .dot{fill:var(--muted)}
 .core{fill:var(--core)}
 .chip{fill:var(--core-chip)}
-.ct{font-size:32px;font-weight:700;fill:var(--core-ink)}
+.ct{font-size:23px;font-weight:700;fill:var(--core-ink)}
+.cte{font-size:20px;font-weight:700;fill:var(--core-ink)}
 .cs{font-size:12.5px;fill:var(--core-sub)}
 .cn{font-size:15px;font-weight:600;fill:var(--core-ink)}
 .cd{font-size:12px;fill:var(--core-sub)}
@@ -84,7 +85,7 @@ text{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
 <rect class="you" x="840" y="125" width="96" height="60" rx="30"/>
 <text x="888" y="161" class="h2" text-anchor="middle">你</text>
 <rect class="core" x="24" y="344" width="912" height="122" rx="20"/>
-<text x="48" y="390" class="ct">内核</text>
+<text x="48" y="390" class="ct">Autoloop 内核</text>
 <text x="48" y="414" class="cs">不到 1500 行 · 零依赖</text>
 <text x="48" y="434" class="cs">不主动连任何东西</text>
 <rect class="chip" x="236" y="358" width="160" height="58" rx="8"/>
