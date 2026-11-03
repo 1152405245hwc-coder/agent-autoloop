@@ -1,14 +1,19 @@
 // Failure modes: measuring buffered writes as durable; excluding process startup; counting serial polls as concurrent.
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir, cpus } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { observePolls, checkPolls, observe, checkBudget, dispatchLatency } from "./metrics.ts";
 
 if (process.argv.includes("--server")) {
+  // A cron tick can claim the poll before its measured event and leave readiness waiting forever.
+  const fixture = JSON.parse(readFileSync(new URL("../tests/rules.fixture.json", import.meta.url), "utf8"));
+  fixture.rules = fixture.rules.filter((rule: { when: { cron?: string } }) => !rule.when.cron);
+  fixture.elsewhere = [];
+  process.env.AGENT_HUB_RULES = join(process.env.AGENT_HUB_HOME!, "rules.json");
+  writeFileSync(process.env.AGENT_HUB_RULES, JSON.stringify(fixture));
   const { serve } = await import("../host/http.ts");
   const { keepKeyHash } = await import("../host/runtime.ts");
   const { db } = await import("../host/runtime.ts");
@@ -43,6 +48,7 @@ if (process.argv.includes("--server")) {
     });
   });
 } else {
+  const { spawn } = await import("node:child_process");
   const home = mkdtempSync(join(tmpdir(), "agent-hub-bench-"));
   const start = performance.now();
   const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", import.meta.filename, "--server"], {
@@ -105,7 +111,14 @@ if (process.argv.includes("--server")) {
     assert.ok(responses.every((r) => r.job === null));
     checkPolls(loaded, responses.length);
     const simulation = (await import("../sim/random.ts")).simulate();
+    const kernelFolder = join(import.meta.dirname, "../kernel");
+    const kernelLines = readdirSync(kernelFolder)
+      .filter((file) => file.endsWith(".ts"))
+      .reduce((total, file) => total + readFileSync(join(kernelFolder, file), "utf8").trimEnd().split("\n").length, 0);
+    const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
     const measured = {
+      kernelLines,
+      runtimeDependencies: Object.keys(manifest.dependencies ?? {}).length,
       machine: cpus()[0].model,
       node: process.version,
       coldMs,

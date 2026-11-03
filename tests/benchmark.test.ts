@@ -1,5 +1,12 @@
-// Failure modes: completed or keep-alive requests masquerade as concurrent long polls; a failed response counts as success.
+// Failure modes: completed or keep-alive requests masquerade as concurrent long polls; a failed response counts as success;
+// cron work is claimed before the measured event, leaving the readiness wait stuck and invalidating dispatch timing.
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { checkPolls, observe, checkBudget, dispatchLatency } from "../scripts/metrics.ts";
 
@@ -52,4 +59,31 @@ test("dispatch latency includes waking an already waiting worker", async () => {
   const measured = await dispatchLatency(request, async () => assert.equal(waiting, true), 1);
   assert.ok(measured.ms >= 40);
   assert.equal(measured.job.run, 1);
+});
+
+test("the benchmark server has no scheduled work competing with measured events", async () => {
+  const home = mkdtempSync(join(tmpdir(), "agent-hub-benchmark-setup-"));
+  const child = spawn(
+    process.execPath,
+    ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "../scripts/benchmark.ts"), "--server"],
+    {
+      env: { ...process.env, AGENT_HUB_HOME: home, AGENT_HUB_RULES: join(import.meta.dirname, "rules.fixture.json") },
+      stdio: ["ignore", "pipe", "pipe", "ipc"],
+    },
+  );
+  try {
+    await once(child.stdout!, "data");
+    const db = new DatabaseSync(join(home, "hub.db"), { readOnly: true });
+    try {
+      const row = db.prepare("SELECT count(*) AS count FROM projections WHERE collection='schedules'").get()!;
+      assert.equal(row.count, 0, "a cron tick can finish a work poll before the timed event");
+    } finally {
+      db.close();
+    }
+  } finally {
+    const exited = once(child, "exit");
+    child.kill("SIGTERM");
+    await exited;
+    rmSync(home, { recursive: true, force: true });
+  }
 });
