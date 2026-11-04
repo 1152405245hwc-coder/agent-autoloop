@@ -11,7 +11,7 @@ export const observe = <T>(promise: Promise<T>): Promise<PromiseSettledResult<T>
 export function observePolls(server: Server) {
   const count = { active: 0, peak: 0 };
   server.prependListener("request", (req, res) => {
-    if (!req.url?.startsWith("/v1/work?wait=5&")) return;
+    if (!/^\/v1\/work\?wait=50?&/.test(req.url ?? "")) return;
     count.peak = Math.max(count.peak, ++count.active);
     res.once("close", () => count.active--);
   });
@@ -31,6 +31,24 @@ export async function dispatchLatency(
   if (result.status === "rejected") throw result.reason;
   assert.ok(result.value.job);
   return { job: result.value.job, ms: performance.now() - at };
+}
+
+/** The value this share of the samples stays at or under; with too few samples, the nearest one above it. */
+export function percentile(values: number[], share: number) {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.max(0, Math.ceil(sorted.length * share) - 1)];
+}
+
+/** Runs an action up to count times, or until it has used its time, and how long each took. Never fewer than once. */
+export async function timed(count: number, budgetMs: number, action: (index: number) => Promise<unknown>) {
+  const took: number[] = [];
+  const start = performance.now();
+  while (took.length < count && (!took.length || performance.now() - start < budgetMs)) {
+    const at = performance.now();
+    await action(took.length);
+    took.push(performance.now() - at);
+  }
+  return took;
 }
 
 export function checkPolls(count: { active: number; peak: number }, completed: number) {
