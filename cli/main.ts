@@ -8,7 +8,7 @@ import { createInterface } from "node:readline/promises";
 import { hubClient } from "../protocol/client.ts";
 import { CONFIG_FILE, readConfig, writeConfig, type Config } from "../host/config.ts";
 import { HOME, RULES_FILE } from "../host/home.ts";
-import { installService, removeService, serviceRunning } from "../host/service.ts";
+import { installService, removeService, restartService, serviceRunning, systemUnit } from "../host/service.ts";
 import { versionLine } from "../host/version.ts";
 import { spendLine } from "./spend.ts";
 import { attemptsOf, newFailure, waitingRetry } from "./try.ts";
@@ -406,7 +406,9 @@ async function doctor() {
       say(false, (error as Error).message);
     }
   }
-  say(serviceRunning(), serviceRunning() ? "系统服务在跑" : "系统服务没在跑：agent-autoloop service install");
+  if (serviceRunning()) say(true, "系统服务在跑");
+  else if (systemUnit()) say(true, "系统级服务在跑");
+  else say(false, "系统服务没在跑：agent-autoloop service install");
   try {
     const health = await (await fetch(`${config.url}/healthz`, { signal: AbortSignal.timeout(5000) })).json();
     say(health.ok === true, `中台 ${config.url}（${String(health.commit).slice(0, 12)}）`);
@@ -554,8 +556,8 @@ function addPlugin(args: string[]) {
 async function update() {
   const pulled = spawnSync("git", ["-C", ROOT, "pull", "--ff-only"], { stdio: "inherit" });
   if (pulled.status !== 0) return fail("更新失败。");
-  if (serviceRunning()) installService();
-  console.log("更新好了。");
+  const told = restartService();
+  console.log(told ? `更新好了。${told}` : "更新好了。");
 }
 
 async function askAtTerminal(question: string) {

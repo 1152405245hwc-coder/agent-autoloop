@@ -151,6 +151,8 @@ MCP 客户端的启动程序填 `node`，参数为本机引擎绝对路径 `bin/
 
 电脑不用开放任何端口，它们自己连过去。
 
+服务器上自己写的系统级 systemd unit，名字要和 `agent-autoloop service install` 用的一样（默认 `agent-autoloop`），`doctor` 才认得出。`agent-autoloop update` 不碰它，更新后自己运行 `systemctl restart` 才会用上新版。
+
 ## 日志与恢复
 
 接插件先在专用测试中台验证：`agent-autoloop conformance <地址> --config <测试凭据文件>`。文件里的 `keys` 分别放来源、接单程序、通道、本人密钥；`eventType` 匹配测试规则，`answerer` 在测试通道的允许名单内。检查会写事件和卡片，不指向正在用的中台。协议类型在 `protocol/schema.json`。
