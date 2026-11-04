@@ -51,6 +51,17 @@ const HELP = `Agent 自动化中台
 
 配置和数据在 ${HOME}。规则在 ${RULES_FILE}，改了自动生效。`;
 
+const INIT_USAGE = `用法：agent-autoloop init [--agent claude|codex] [--command '某个命令 {prompt}'] [--port 3350] [--no-service]
+
+  --agent      只接这个 Agent：claude 或 codex。不写就接本机装好的全部
+  --command    改用别的命令行 Agent；{prompt} 会作为一个独立参数传进去
+  --port       中台监听的端口，默认 3350
+  --no-service 先不装系统服务，之后手动运行 agent-autoloop up`;
+
+const TRY_USAGE = `用法：agent-autoloop try
+
+用本机接好的 Agent 跑一遍完整流程：提问，进程退出等你回复，你拍板，它接着干完。`;
+
 type Flags = Record<string, string | true>;
 
 function flags(args: string[]) {
@@ -72,6 +83,21 @@ const fail = (words: string): never => {
   console.error(words);
   process.exit(1);
 };
+
+/**
+ * The flags a command does read, or a stop naming the ones it does not. A misspelt --port would otherwise install with
+ * the default in silence, and --help would install at all.
+ */
+function flagsOf(args: string[], allowed: string[], usage: string) {
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(usage);
+    process.exit(0);
+  }
+  const parsed = flags(args);
+  const unknown = Object.keys(parsed.named).filter((name) => !allowed.includes(name));
+  if (unknown.length) fail(`不认识的参数：${unknown.map((name) => `--${name}`).join("、")}\n\n${usage}`);
+  return parsed;
+}
 
 const client = (key: string, config = readConfig()) => hubClient(config.url, key);
 const ownerClient = (config = readConfig()) =>
@@ -151,7 +177,7 @@ async function agentsToUse(named: Flags, worker: string) {
 }
 
 async function init(args: string[]) {
-  const { named } = flags(args);
+  const { named } = flagsOf(args, ["agent", "command", "port", "no-service"], INIT_USAGE);
   if (existsSync(CONFIG_FILE)) return fail(`已经装过了：${CONFIG_FILE}`);
   mkdirSync(HOME, { recursive: true, mode: 0o700 });
   mkdirSync(path.join(HOME, "try"), { recursive: true });
@@ -546,7 +572,10 @@ const commands: Record<string, () => unknown> = {
   init: () => init(args),
   join: () => join(args),
   up: async () => (await import("../host/up.ts")).up(),
-  try: tryIt,
+  try: () => {
+    flagsOf(args, [], TRY_USAGE);
+    return tryIt();
+  },
   status,
   why: () => why(args),
   conformance: () => checkConformance(args),
