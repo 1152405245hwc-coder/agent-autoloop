@@ -199,6 +199,10 @@ async function join(args: string[]) {
   const name = text(named.worker);
   const key = text(named.key);
   if (!url || !name || !key) return fail("用法：agent-autoloop join <中台地址> --worker <名字> --key <密钥>");
+  // Joining another hub must not silently replace this machine's existing hub, worker or owner keys.
+  if (existsSync(CONFIG_FILE)) {
+    return fail(`已经配置过了：${CONFIG_FILE}。为防止覆盖现有设置，请先备份并手动修改配置。`);
+  }
   writeConfig({ url, worker: { name, key } });
   if (!named["no-service"]) installService();
   console.log(`这台电脑以 ${name} 的身份接活了。`);
