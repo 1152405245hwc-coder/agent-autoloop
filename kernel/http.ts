@@ -31,6 +31,8 @@ class TooLarge extends Error {}
 
 async function readText(request: Request) {
   if (!request.body) return "";
+  // A little over the limit is read to its end: hanging up mid-upload can cost the client its 413.
+  if (Number(request.headers.get("content-length")) > 8 * MAX_BODY) throw new TooLarge();
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
