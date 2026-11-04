@@ -10,6 +10,12 @@ export const WORKER_FRESH = 2 * MINUTE;
 export const RUN_LEASE = 5 * MINUTE;
 /** How long work can wait on a worker that doesn't come before the owner hears. */
 export const OFFLINE_AFTER = 10 * MINUTE;
+/**
+ * How often being seen goes in the log. A worker asks every second with work in hand and a fact is a disk sync, so a stamp
+ * can be behind the last contact by this much. It has to stay under what reads it: with the 50 seconds between idle polls,
+ * under WORKER_FRESH; and under RUN_LEASE - WORKER_FRESH, or a run could look quiet while its worker still looks there.
+ */
+export const SEEN_EVERY = MINUTE;
 
 export function deadlines(view: View, now: number) {
   const due: Record<string, Row> = {};

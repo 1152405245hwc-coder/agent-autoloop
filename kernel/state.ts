@@ -1,12 +1,13 @@
 // What's going on, for the owner's own clients, read from what's there: rules, cards, runs and who has been seen.
 import type { SQLInputValue } from "node:sqlite";
 import { describeCron, dayStart, nextRun, parseCron } from "./cron.ts";
+import { SEEN_EVERY } from "./due.ts";
 import { iso, type Row } from "./evolve.ts";
 import type { cardView } from "./query.ts";
 import { cronOf, eventRule, SCHEDULE, type Rules } from "./rules.ts";
 
-/** Seen this recently counts as online. */
-const ONLINE = 120_000;
+/** Seen this recently counts as online: two minutes of quiet, by a stamp that can be behind by SEEN_EVERY. */
+const ONLINE = 120_000 + SEEN_EVERY;
 const PAGE = 60;
 const WEEK = 7 * 86400_000;
 

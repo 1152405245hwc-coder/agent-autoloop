@@ -2,7 +2,7 @@
 // to give. Time and secrets come in as arguments, so the same input on the same view always decides the same.
 import { credential, digest, type Environment } from "./credentials.ts";
 import { latestBefore, nextRun, parseCron } from "./cron.ts";
-import { deadlines, MINUTE, OFFLINE_AFTER, RUN_LEASE, WORKER_FRESH } from "./due.ts";
+import { deadlines, MINUTE, OFFLINE_AFTER, RUN_LEASE, SEEN_EVERY, WORKER_FRESH } from "./due.ts";
 import { AuthError, Conflict, InputError, NotFound } from "./errors.ts";
 import { iso, rows, type Change, type Fact, type Row, type Table, type View } from "./evolve.ts";
 import {
@@ -126,6 +126,12 @@ function closeOpen(draft: Draft, matches: (key: string) => boolean, result: stri
 
 const closeOffline = (draft: Draft, worker: string) =>
   closeOpen(draft, (key) => key.startsWith(`worker:${worker}:offline:`), "连上了");
+
+/** Whether a new stamp would tell nothing this one doesn't. One in the future means a clock was set back: it gets redone. */
+function justSeen({ now }: Draft, row?: Row) {
+  const age = now - Date.parse(row?.seen_at);
+  return age >= 0 && age < SEEN_EVERY;
+}
 
 function createCard(draft: Draft, spec: Row) {
   const cards = rows(draft.view, "cards", { key: spec.key, ...(!spec.once && { state: "open" }) }, 1, true);
@@ -512,17 +518,18 @@ const HANDLERS: Record<string, (draft: Draft, ...args: any[]) => unknown> = {
     return { ...told, duplicate: false };
   },
   heartbeat(draft, worker, running) {
-    put(draft, "seen", `worker:${worker}`, { kind: "worker", name: worker, seen_at: draft.at });
     closeOffline(draft, worker);
-    for (const id of running) {
-      const run = draft.view.get("runs", id);
-      if (run?.state === "claimed" && workerOf(draft.view, run) === worker) {
-        put(draft, "runs", id, { seen_at: draft.at });
-      }
-    }
+    const held = (run?: Row) => run?.state === "claimed" && workerOf(draft.view, run) === worker;
+    const inHand = running.map((id: number) => draft.view.get("runs", id)).filter(held);
+    // All stamped together, so however many runs a worker has on, it's one fact each time.
+    if ([draft.view.get("seen", `worker:${worker}`), ...inHand].every((row) => justSeen(draft, row))) return;
+    put(draft, "seen", `worker:${worker}`, { kind: "worker", name: worker, seen_at: draft.at });
+    for (const run of inHand) put(draft, "runs", run.id, { seen_at: draft.at });
   },
-  channelSeen: (draft, name) =>
-    void put(draft, "seen", `channel:${name}`, { kind: "channel", name, seen_at: draft.at }),
+  channelSeen(draft, name) {
+    if (justSeen(draft, draft.view.get("seen", `channel:${name}`))) return;
+    put(draft, "seen", `channel:${name}`, { kind: "channel", name, seen_at: draft.at });
+  },
   claimNext,
   started(draft, id, token, given) {
     const { session, link } = given ?? {};
