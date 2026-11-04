@@ -115,6 +115,8 @@ export default async function feishu({ hub, options, log, signal }: ChannelConte
       const consume = spawn(program, ["event", "consume", "card.action.trigger", "--as", "bot"], {
         stdio: ["pipe", "pipe", "pipe"],
       });
+      // Unheard, this would end the whole hub. A process that never started still closes, which starts it again below.
+      consume.on("error", (error) => log(`the click listener couldn't run: ${error}`));
       const stop = () => consume.kill();
       signal.addEventListener("abort", stop);
       readline.createInterface({ input: consume.stderr }).on("line", (line) => log(line));

@@ -1,8 +1,9 @@
 // The channels that ship and the webhook adapter. No real listener runs here: only one can hold an app's card clicks.
 // Failure cases: a first send uses a key that changes with the version, or an update sends a new message; a failed send
 // isn't reported; a click that isn't a card's is taken; a card's options don't show while it's open or still show after;
-// the listener dying isn't started again. A GitHub webhook with a bad signature, or with none, is taken; what isn't an
-// identifier reaches the subject; a ping makes an event; replacement tokens in card text rewrite a webhook template.
+// the listener dying isn't started again, or a listener that can't start takes the whole hub down. A GitHub webhook with
+// a bad signature, or with none, is taken; what isn't an identifier reaches the subject; a ping makes an event;
+// replacement tokens in card text rewrite a webhook template.
 // A slow CLI call must not block the hub's HTTP loop while looking up a user, sending or updating a card.
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
@@ -101,6 +102,21 @@ else {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+});
+
+test("feishu: a lark-cli that can't be started is said, not left to take the hub down", async () => {
+  const stop = new AbortController();
+  const lines: string[] = [];
+  const hub = { nextCard: () => new Promise((resolve) => setTimeout(() => resolve({ card: null }), 5)) };
+  const log = (line: string) => {
+    lines.push(line);
+    stop.abort();
+  };
+  // Returning shows the listener's loop went on past the failure, to where it would start again. Without the time limit
+  // a crash, which the test runner catches, would leave this waiting for good.
+  const signal = AbortSignal.any([stop.signal, AbortSignal.timeout(5_000)]);
+  await feishu({ hub: hub as any, options: { user: "ou_me", lark: join(dir, "not-there") }, log, signal });
+  assert.match(lines[0] ?? "", /ENOENT/);
 });
 
 test("feishu: sends once per card, updates in place, reports failure, and only real clicks count", async () => {
