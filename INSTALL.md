@@ -4,7 +4,7 @@
 
 ## 安装
 
-支持 macOS、Linux，暂不支持 Windows。需要 Node.js 24 或更新、Git、curl，以及一个已经登录的命令行 Agent。
+支持 macOS、Linux。Windows 版待定：作者这个周末（11 月 7、8 日）回家后开发并做兼容性测试，进度见 [#17](https://github.com/KKKKhazix/agent-autoloop/issues/17)，现在还不能装。需要 Node.js 24 或更新、Git、curl，以及一个已经登录的命令行 Agent。
 
 先检查 `node --version`。Homebrew 的 `node@24` 默认不进 PATH，装好后还要运行 `export PATH="$(brew --prefix node@24)/bin:$PATH"`；需要长期生效时再写入用户的 shell 配置。不要替用户登录，也不要读取或复制登录凭据。
 

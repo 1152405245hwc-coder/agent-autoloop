@@ -22,6 +22,8 @@ Most of us use command-line agents like Claude Code or Codex by babysitting a te
 
 Works on macOS and Linux. You need Node 24, Git, curl, and at least one command-line agent already signed in; no GitHub account required. You can also hand the [installation guide](INSTALL.md) to your agent and let it install everything for you.
 
+> **Windows: pending.** Many of you have asked for a Windows version, and I've seen every request. I'm away on a work trip without a Windows machine, so I can't build or test it on real hardware, and it doesn't run on Windows yet. When I get home this weekend (November 7–8), I'll finish it, run compatibility tests, and then release it properly. Progress will be posted in [#17](https://github.com/KKKKhazix/agent-autoloop/issues/17).
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/KKKKhazix/agent-autoloop/main/install.sh | sh
 ```
