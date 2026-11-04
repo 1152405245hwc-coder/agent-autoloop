@@ -111,11 +111,20 @@ export let rules = query.configuration(current);
 let loaded = { file: "", mtime: 0 };
 
 export function reloadRules(file = RULES_FILE) {
-  const mtime = statSync(file).mtimeMs;
-  if (loaded.file === file && loaded.mtime === mtime) return { changed: false };
+  let mtime: number;
+  let text: string;
+  try {
+    mtime = statSync(file).mtimeMs;
+    if (loaded.file === file && loaded.mtime === mtime) return { changed: false };
+    text = readFileSync(file, "utf8");
+  } catch (error) {
+    // Forget the last read: a file moved back keeps its old mtime and must still be read again.
+    loaded = { file: "", mtime: 0 };
+    return { changed: false, problem: unreadable(file, error as NodeJS.ErrnoException) };
+  }
   loaded = { file, mtime };
   try {
-    const next = parseRules(readFileSync(file, "utf8"));
+    const next = parseRules(text);
     const differs = JSON.stringify(next) !== JSON.stringify(query.configuration(getView()));
     const reportedBroken = (card: Row) => card.key.startsWith("rules:") && card.state === "open";
     if (differs || rows(current, "cards", { state: "open" }).some(reportedBroken)) execute("rules", [next]);
@@ -125,6 +134,12 @@ export function reloadRules(file = RULES_FILE) {
     if (error instanceof RulesError) return { changed: false, problem: error.message };
     throw error;
   }
+}
+
+function unreadable(file: string, error: NodeJS.ErrnoException) {
+  if (error.code === "ENOENT") return `找不到 ${file}，被删掉或移走了？放回去就会接着用`;
+  if (error.code === "EACCES" || error.code === "EPERM") return `没有权限读 ${file}，改回能读的权限就会接着用`;
+  return `读不到 ${file}：${error.code ?? error.message}`;
 }
 
 const initial = reloadRules();

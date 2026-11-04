@@ -6,8 +6,10 @@
 // than one at a time without saying how many, or rules in one group disagreeing on it; an emit naming a source that isn't
 // there; a scheduled task shown on the page naming a source or agent that isn't there or a malformed schedule; a time zone
 // that doesn't exist; the reserved source redefined; a null rule crashes reload instead of keeping the old rules.
-// A good file changing on disk takes effect; a bad one doesn't, and says why.
+// A good file changing on disk takes effect; a bad one doesn't, and says why. A file that is gone or can't be read
+// crashes the hub, at reload or at restart, instead of keeping the rules it had.
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -184,4 +186,33 @@ test("a good file changing on disk takes effect; a bad one leaves the old rules 
   assert.equal(answer.changed, false);
   assert.match(answer.problem!, /nobody/);
   assert.equal(ruleNamed("意见")!.prompt, "新的说法。", "the old rules keep running");
+});
+
+test("a rules file that can't be read is a problem, not a crash, and the old rules keep running", () => {
+  const answer = reloadRules(join(home, "gone.json"));
+  assert.equal(answer.changed, false);
+  assert.match(answer.problem!, /找不到/);
+  assert.equal(ruleNamed("意见")!.prompt, "新的说法。");
+  assert.match(reloadRules(home).problem!, /读不到/, "a folder where the file should be");
+});
+
+test("a hub restarting without its rules file comes up on the rules it had; a new one without any says why", () => {
+  const start = (env: Record<string, string>) =>
+    spawnSync(
+      process.execPath,
+      [
+        "--disable-warning=ExperimentalWarning",
+        "--input-type=module",
+        "-e",
+        `const hub = await import(${JSON.stringify(new URL("../host/runtime.ts", import.meta.url).href)});` +
+          `console.log(hub.ruleNamed("意见")?.prompt)`,
+      ],
+      { env: { ...process.env, ...env }, encoding: "utf8" },
+    );
+  const restarted = start({ AGENT_AUTOLOOP_RULES: join(home, "gone.json") });
+  assert.equal(restarted.status, 0, restarted.stderr);
+  assert.equal(restarted.stdout.trim(), "新的说法。", "the rules it last loaded, not the fixture's");
+  const fresh = start({ AGENT_AUTOLOOP_HOME: join(home, "fresh"), AGENT_AUTOLOOP_RULES: join(home, "gone.json") });
+  assert.notEqual(fresh.status, 0);
+  assert.match(fresh.stderr, /找不到/);
 });

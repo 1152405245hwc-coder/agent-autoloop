@@ -92,7 +92,7 @@ External events work the same way once the source is connected. To hand new GitH
 }
 ```
 
-Changes take effect within seconds of saving. Run `agent-autoloop check` to validate. If you make a mistake, the hub keeps running the previous valid rules and sends you a card pointing out the error.
+Changes take effect within seconds of saving. Run `agent-autoloop check` to validate. If you make a mistake, or the file is deleted or can't be read, the hub keeps running the previous valid rules and sends you a card about it.
 
 ### How agents talk back to the hub
 

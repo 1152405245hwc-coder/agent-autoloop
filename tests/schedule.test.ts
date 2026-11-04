@@ -2,9 +2,9 @@
 // just been changed; a hub asleep through several runs each of them (only the latest is owed) or none; a timer fires early,
 // twice, or doesn't wake its own thread in its session; writing the same key makes a second timer; cancelling leaves it; a
 // fired timer stops a new one being set under its key; a bad rules file stops the hub or isn't told; told every tick, or
-// the card stays after it's fixed.
+// the card stays after it's fixed; a rules file that is gone stops the hub, or isn't picked up when it's moved back.
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { at, setup } from "./helpers.ts";
@@ -171,6 +171,22 @@ test("a bad rules file keeps the hub going, says so once, and the card closes wh
   assert.equal(cards()[0].state, "open");
   writeFileSync(rulesFile, good);
   void stamp;
+  tick(at(2));
+  assert.equal(cards()[0].state, "closed");
+});
+
+test("a rules file that goes away keeps the hub going, says so once, and the card closes when it's back", () => {
+  clean();
+  const away = `${rulesFile}.away`;
+  // Moving it back keeps its modification time, so coming back must not look like nothing changed.
+  renameSync(rulesFile, away);
+  tick(at(0));
+  tick(at(1));
+  const cards = () => all<{ text: string; state: string }>("SELECT text, state FROM cards");
+  assert.equal(cards().length, 1);
+  assert.match(cards()[0].text, /找不到/);
+  assert.equal(cards()[0].state, "open");
+  renameSync(away, rulesFile);
   tick(at(2));
   assert.equal(cards()[0].state, "closed");
 });
