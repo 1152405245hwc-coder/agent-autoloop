@@ -3,6 +3,12 @@
 import { InputError } from "../kernel/errors.ts";
 
 export const EVENT_TYPE = /^[a-z][a-z0-9_.-]{0,63}$/;
+/** What the protocol allows a card answer to carry: the schema says so, and the hub keeps it. */
+export const ANSWER_TEXT = 4000;
+export const ANSWER_BY = 500;
+export const ANSWER_REF = 500;
+/** A channel's own reference to the message it sent. */
+export const DELIVERY_REF = 500;
 export type Later = { key: string; at?: string; about?: string; cancel?: boolean };
 export type Ask = { title: string; text: string; options: string[]; recommend?: number; about?: string; key?: string };
 export type Notice = { title: string; text: string; key?: string };

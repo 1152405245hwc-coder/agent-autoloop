@@ -1,5 +1,6 @@
 // What reaches the owner. A card's words never change; only its state does. Failure cases: asking the same thing while it
-// is open makes a second card, or closed it blocks asking again; an answer takes a choice that doesn't exist, counts twice,
+// is open makes a second card, or closed it blocks asking again; an answer takes a choice that doesn't exist, carries
+// more words or a longer reference than the protocol allows, counts twice,
 // or beats a resolve that came first (only one may change an open card); an answer from someone not on the channel's list,
 // or on a message that isn't the one sent, counts; an answer doesn't wake the thread that asked, wakes another thread, is
 // lost because its run was merged, or doesn't carry the session and what the asker left for itself; the card doesn't show
@@ -15,7 +16,7 @@ import { at, setup } from "./helpers.ts";
 setup("cards");
 const { ingest } = await import("../host/runtime.ts");
 const { claimNext, finish, started } = await import("../host/runtime.ts");
-const { answer, resolve, nextCard, delivered, failed, tell, cardByToken, answerByLink } =
+const { answer, resolve, nextCard, delivered, failed, tell, cardByToken, answerByLink, getView } =
   await import("../host/runtime.ts");
 const { AuthError, InputError, NotFound } = await import("../kernel/errors.ts");
 const { all, one, run } = await import("./storage.ts");
@@ -146,6 +147,34 @@ test("a free-text answer counts as an answer", () => {
   answer(id, { text: "都不选，改成归档", by: "me" }, at(1));
   const job = claim("w1", at(1))!;
   assert.deepEqual([job.context.answers[0].choice, job.context.answers[0].text], [null, "都不选，改成归档"]);
+});
+
+test("an answer is bounded by the protocol's limits, and a refused one changes nothing", () => {
+  clean();
+  const words = (n: number) => "可".repeat(n);
+  const first = asked(1);
+  const before = getView().seq;
+  assert.throws(() => answer(first.id, { text: words(4001), by: "me" }, at(1)), InputError);
+  assert.throws(() => answer(first.id, { text: "好的", by: "名".repeat(501) }, at(1)), InputError);
+  assert.throws(() => answer(first.id, { text: "好的", by: 42 } as any, at(1)), InputError);
+  assert.throws(() => answer(first.id, { text: "好的", ref: "r".repeat(501) }, at(1)), InputError);
+  assert.throws(() => answer(first.id, { text: "好的", ref: 42 } as any, at(1)), InputError);
+  assert.equal(getView().seq, before, "a refused answer writes no fact");
+  assert.equal(card(first.id).state, "open", "a refused answer leaves the card open");
+  // The limit itself is allowed.
+  assert.equal(
+    answer(first.id, { text: words(4000), by: "名".repeat(500), ref: "r".repeat(500) }, at(1)).changed,
+    true,
+  );
+  // A channel's own message id has the same bound.
+  const second = asked(2);
+  const version = card(second.id).version;
+  const beforeDelivery = getView().seq;
+  assert.throws(() => delivered("chat", second.id, version, "r".repeat(501), at(2)), InputError);
+  assert.throws(() => delivered("chat", second.id, version, 42 as any, at(2)), InputError);
+  assert.equal(getView().seq, beforeDelivery, "a refused report writes no fact");
+  delivered("chat", second.id, version, "r".repeat(500), at(2));
+  assert.ok(getView().seq > beforeDelivery);
 });
 
 test("a channel's answer must come from someone on its list, on the message it sent", () => {

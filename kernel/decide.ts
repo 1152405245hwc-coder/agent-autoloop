@@ -18,7 +18,18 @@ import {
   workers,
 } from "./query.ts";
 import { cronOf, eventRule, SCHEDULE, typeMatches, type Rule, type Rules } from "./rules.ts";
-import { addUsage, parseEvent, parseResult, type Later, type Rejected, type Result } from "../protocol/validate.ts";
+import {
+  addUsage,
+  ANSWER_BY,
+  ANSWER_REF,
+  ANSWER_TEXT,
+  DELIVERY_REF,
+  parseEvent,
+  parseResult,
+  type Later,
+  type Rejected,
+  type Result,
+} from "../protocol/validate.ts";
 
 export type Input = { type: string; args: any[] };
 
@@ -390,12 +401,19 @@ function answer(draft: Draft, id: number, given: Row) {
     if (!delivery?.ref || delivery.ref !== given.ref) throw new AuthError("不是发出去的那条消息");
   }
   if (card.state !== "open") return { changed: false, state: card.state };
+  if (given.by !== undefined && (typeof given.by !== "string" || [...given.by].length > ANSWER_BY)) {
+    throw new InputError(`回答人最多 ${ANSWER_BY} 字`);
+  }
+  if (given.ref !== undefined && (typeof given.ref !== "string" || [...given.ref].length > ANSWER_REF)) {
+    throw new InputError(`消息编号最多 ${ANSWER_REF} 字`);
+  }
   if (card.kind === "notice") {
     closeCard(draft, card, "已处理", given.by ?? null);
     return { changed: true, state: "closed" };
   }
   if (given.text !== undefined && typeof given.text !== "string") throw new InputError("回答要是文字");
   const text = given.text?.trim() || null;
+  if (text !== null && [...text].length > ANSWER_TEXT) throw new InputError(`回答最多 ${ANSWER_TEXT} 字`);
   const optionCount = JSON.parse(card.options).length;
   const inRange = Number.isInteger(given.choice) && given.choice >= 0 && given.choice < optionCount;
   if (given.choice === undefined ? !text : !inRange) throw new InputError("没有这个选项");
@@ -535,6 +553,9 @@ const HANDLERS: Record<string, (draft: Draft, ...args: any[]) => unknown> = {
   nextCard,
   delivered(draft, channel, id, version, ref) {
     if (!draft.view.get("cards", id)) throw new NotFound("没有这张卡片");
+    if (ref !== null && (typeof ref !== "string" || [...ref].length > DELIVERY_REF)) {
+      throw new InputError(`消息编号最多 ${DELIVERY_REF} 字`);
+    }
     const delivery = draft.view.get("deliveries", `${id}:${channel}`) ?? NOT_DELIVERED;
     const sent = { version: Math.max(delivery.version, version), ref: delivery.ref ?? ref };
     put(draft, "deliveries", `${id}:${channel}`, { card_id: id, channel, ...sent, ...NOT_TRYING, error: null });

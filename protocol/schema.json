@@ -336,7 +336,8 @@
           "minimum": 1
         },
         "ref": {
-          "type": ["string", "null"]
+          "type": ["string", "null"],
+          "maxLength": 500
         }
       },
       "required": ["version"],
