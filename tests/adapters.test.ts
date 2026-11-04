@@ -1,7 +1,8 @@
 // What's different about each agent. Failure cases: a level of access maps to the wrong flag, full access is given unasked,
 // a retry starts a new conversation instead of going on, an error or a turn that never finished counts as an answer, a
-// program's warning is taken for its answer, the session isn't picked out, a command line's placeholder isn't filled in,
-// or a background Codex run assumes it inherited an application's browser connection.
+// program's warning is taken for its answer, a finished Claude run printed as one JSON array is read as a failure, the
+// session isn't picked out, a command line's placeholder isn't filled in, or a background Codex run assumes it inherited
+// an application's browser connection.
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -86,6 +87,9 @@ test("Claude Code: reading its result", () => {
   );
   assert.equal(claude.read(line({ is_error: true, result: "x" }), 1, "").session, "s");
   assert.equal(claude.read(line({ subtype: "error_max_turns", result: undefined }), 1, "").error, "error_max_turns");
+  // With verbose on, Claude Code prints every message as one JSON array on a single line.
+  const array = `[{"type":"system","subtype":"init"},{"type":"assistant"},${line({})}]\n`;
+  assert.equal(claude.read(array, 0, "").text, "好了");
   assert.deepEqual(claude.read("", null, ""), {}, "still going");
   assert.equal(claude.read("", 1, "boom").error, "boom");
   assert.equal(claude.read("", 0, "").error, "没留下结果");
