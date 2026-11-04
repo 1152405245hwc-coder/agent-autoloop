@@ -10,7 +10,8 @@
 // stale one is accepted after the run was handed out again; a replayed result isn't recognised, or a different one under an
 // old token is taken; a failed run's receipt takes effect (it will run again) beyond what it tells the owner; a worker
 // gone with work in hand frees its group while the work may still be going; cancelling frees the thread before the worker
-// has stopped; a retry doesn't get its own session back; retries overwrite usage or replayed results count it twice.
+// has stopped; a retry doesn't get its own session back; retries overwrite usage or replayed results count it twice; a run
+// that keeps failing goes on spending for good, stops without telling the owner, or takes newer events down with it.
 // Reloading rules must not combine an old agent with a new folder, or change an already claimed job and its worker.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -233,6 +234,48 @@ test("a failed run comes back later with what came in meanwhile, in its own sess
   job = claim("w1", at(80))!;
   finish(job.run, job.token, { outcome: "done", summary: "好了" }, at(81));
   assert.equal(told()[0].state, "closed", "once it has worked the failing card closes by itself");
+});
+
+test("after ten failures in a row a run stops, tells the owner once, and newer events still get done", () => {
+  clean();
+  ingest("app", note(1), at(0));
+  const step = 100;
+  let job = claim("w1", at(0))!;
+  const { run: id } = job;
+  for (let failure = 1; failure < 10; failure++) {
+    finish(id, job.token, { outcome: "failed", error: "没登录" }, at(failure * step));
+    assert.equal(state(id), "queued", `still retrying after failure ${failure}`);
+    job = claim("w1", at((failure + 1) * step - 1))!;
+    assert.equal(job.run, id);
+  }
+  ingest("app", note(1, "followup"), at(10 * step - 2));
+  finish(id, job.token, { outcome: "failed", error: "没登录。" }, at(10 * step));
+  assert.equal(state(id), "cancelled");
+  const stopped = one<{ attempts: number; error: string; summary: string; finished_at: string }>(
+    "SELECT attempts, error, summary, finished_at FROM runs WHERE id = ?",
+    [id],
+  )!;
+  assert.equal(stopped.attempts, 10);
+  assert.equal(stopped.error, "没登录");
+  assert.match(stopped.summary, /连续 10 次没跑成/);
+  assert.ok(stopped.finished_at);
+  const open = told().filter((card) => card.state === "open");
+  assert.deepEqual(
+    open.map((card) => card.key),
+    [`run:${id}:stopped`],
+    "the third-failure card has been replaced by this one",
+  );
+  assert.match(open[0].text, /连续 10 次.*卡在：没登录.*不再自动重试/);
+
+  const next = claim("w1", at(10 * step + 1))!;
+  assert.notEqual(next.run, id, "what came in meanwhile is its own run, with a clean count");
+  assert.equal(next.attempt, 1);
+  assert.deepEqual(
+    next.context.events.map((event) => event.type),
+    ["feedback.followup"],
+  );
+  finish(next.run, next.token, { outcome: "done", summary: "好了" }, at(10 * step + 2));
+  assert.equal(claim("w1", at(100 * step)), null, "nothing is left to run again by itself");
 });
 
 test("the owner is told what the rule says: needed only with a card, always every time, never only what blocks work", () => {

@@ -28,6 +28,8 @@ const RESEND_AT = [0, 1, 3, 7, 15, 25, 35, 45, 55];
 const RESEND_WINDOW = 57 * MINUTE;
 /** How long a chain of events causing events can get before it stops being dispatched. */
 const MAX_HOPS = 8;
+/** Failures in a row after which a run stops being retried: each try spends the owner's real tokens. */
+const MAX_ATTEMPTS = 10;
 const NOT_TRYING = { tries: 0, first_try_at: null, not_before: null };
 const NOT_DELIVERED: Row = { version: 0, ref: null, ...NOT_TRYING, error: null, given_up: 0 };
 
@@ -262,6 +264,21 @@ function retryLater(draft: Draft, run: Row, result: Result) {
   const notBefore = draft.now + Math.min(5 * MINUTE * 2 ** (attempts - 1), 60 * MINUTE);
   const error = (result.error ?? "").trim().replace(/[。.]+$/, "") || "没说原因";
   const unclaimed = nulls("claim", "claimed_at", "seen_at", "cancel_at");
+  const rejected: Rejected[] = [];
+  for (const what of ["ask", "resolve", "later", "events"] as const) {
+    for (const _ of result[what] ?? []) rejected.push({ what, reason: "没跑成的一轮只能发通知" });
+  }
+  for (const notice of result.notice ?? []) cardFromReceipt(draft, run, "notice", notice);
+  if (attempts >= MAX_ATTEMPTS) {
+    // Runs queued for this thread stay apart: they came in since, and get their own count and their own go.
+    const summary = `连续 ${MAX_ATTEMPTS} 次没跑成，不再自动重试`;
+    const finished = { state: "cancelled", finished_at: draft.at, summary };
+    put(draft, "runs", id, { ...finished, attempts, error, ...unclaimed });
+    closeOpen(draft, (key) => key === `run:${id}:failing`, summary);
+    const words = `连续 ${MAX_ATTEMPTS} 次自动处理没跑完（卡在：${error}），不再自动重试。解决后重新触发这件事，它会从头开始。`;
+    notify(draft, `run:${id}:stopped`, run.rule, words, threadOf(run));
+    return rejected;
+  }
   put(draft, "runs", id, { state: "queued", attempts, not_before: iso(notBefore), error, ...unclaimed });
   const sameThread = (other: Row) => other.id !== id && other.rule === run.rule && other.lane === run.lane;
   for (const other of rows(draft.view, "runs", { rule: run.rule, lane: run.lane, state: "queued" }).filter(
@@ -274,11 +291,6 @@ function retryLater(draft: Draft, run: Row, result: Result) {
     set(draft, "runs", other.id, null);
     if (other.resume) put(draft, "runs", id, { resume: other.resume });
   }
-  const rejected: Rejected[] = [];
-  for (const what of ["ask", "resolve", "later", "events"] as const) {
-    for (const _ of result[what] ?? []) rejected.push({ what, reason: "没跑成的一轮只能发通知" });
-  }
-  for (const notice of result.notice ?? []) cardFromReceipt(draft, run, "notice", notice);
   if (!result.notice?.length && attempts === 3) {
     const clock = { timeZone: draft.rules.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" } as const;
     const time = new Intl.DateTimeFormat("zh-CN", clock).format(notBefore);
