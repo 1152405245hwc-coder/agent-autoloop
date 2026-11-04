@@ -18,7 +18,7 @@ export default {
       }
     }
     if (code !== null && (code !== 0 || !reading.finished)) {
-      return { session: reading.session, error: tail(stderr) || "ACP 没有完成这一轮" };
+      return { session: reading.session, started: reading.started, error: tail(stderr) || "ACP 没有完成这一轮" };
     }
     return reading;
   },

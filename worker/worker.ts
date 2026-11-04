@@ -303,7 +303,8 @@ export function createWorker({
       const error = seen.error || "没留下结果";
       if (entry.repairs) return discardReceipt(entry, adapter, error);
       // The conversation may not be there to go on in, or something else has it open: this go carries on in a new one.
-      if (entry.resume && !entry.triedFresh && entry.repairs === 0) {
+      // Not once the turn has started: a new one would do its work again. The hub tries again later, in this one.
+      if (entry.resume && !entry.triedFresh && entry.repairs === 0 && !seen.started) {
         log(`run ${entry.run}: couldn't go on in ${entry.resume} (${error}); starting a new session`);
         entry.triedFresh = true;
         entry.resume = null;

@@ -54,7 +54,7 @@ description: 配置 Agent 自动化中台：加规则、接新的事件插件、
 "hermes": { "name": "Hermes", "worker": "my-mac", "use": "command", "command": ["hermes", "chat", "-Q", "-q", "{prompt}"] }
 ```
 
-退出码不是 0 算没跑成。要会话接续、打开会话的链接和用量统计，在 `~/.agent-autoloop/plugins/<名字>/agent.ts` 写一个插件（照 `plugins/codex/agent.ts`）：`command` 给命令行，`read` 从输出读最后一条消息和会话，`link` 给链接。
+退出码不是 0 算没跑成。要会话接续、打开会话的链接和用量统计，在 `~/.agent-autoloop/plugins/<名字>/agent.ts` 写一个插件（照 `plugins/codex/agent.ts`）：`command` 给命令行，`read` 从输出读最后一条消息和会话，Agent 收下提示词后带上 `started: true`（否则干到一半断了会开新会话重做），`link` 给链接。
 
 `access` 默认 `edit`，专用插件翻译成对应 CLI 的权限；`command` 只传参数，不替任意程序限制权限，按该 CLI 文档配置。要完整权限、不审批的话写 `full`，先和用户说清楚。
 

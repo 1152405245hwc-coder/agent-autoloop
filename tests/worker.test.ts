@@ -7,7 +7,8 @@
 // failed; a run over its time or told to stop goes on, or leaves its children behind; the hub is told it stopped before it
 // has; more than capacity at once are taken; a claim is thrown away before its job has arrived; a receipt that can't be read
 // redoes the work, isn't asked for again, is asked for without end, or is dropped without telling the owner; a session that
-// can't be gone on in fails the run instead of starting a new one, or keeps trying; a turn's end that doesn't exit holds its
+// can't be gone on in fails the run instead of starting a new one, or keeps trying; a turn that went on in its session and
+// then broke, said nothing, or vanished is run again in a new one, or loses that session; a turn's end that doesn't exit holds its
 // place for ever; an old turn's exit is taken for a new one's; the hub gone for ten minutes isn't told, told every minute,
 // taken as told when the telling failed, tried without end, or not told again after it came back and went away again.
 // A shell replacing itself with the final move must not lose its identity before the exit file is published.
@@ -38,9 +39,11 @@ export default {
   read(stdout, code, stderr) {
     const session = /session=(\\S+)/.exec(stdout)?.[1];
     const finished = stdout.includes("TURN-OVER");
-    if (code === null) return { session, finished };
-    if (code !== 0) return { session, error: stderr.trim() || "boom" };
-    return { text: stdout.replace(/session=\\S+\\n/, "").replace("TURN-OVER\\n", ""), session, finished, usage: { input: 1, output: 1 } };
+    const started = stdout.includes("TURN-BEGAN");
+    if (code === null) return { session, finished, started };
+    if (code !== 0) return { session, started, error: stderr.trim() || "boom" };
+    const text = stdout.replace(/session=\\S+\\n/, "").replace("TURN-OVER\\n", "").replace("TURN-BEGAN\\n", "");
+    return { text, session, finished, started, usage: { input: 1, output: 1 } };
   },
   link: (s) => "app://" + s,
 };`,
@@ -528,6 +531,45 @@ test("a session that can't be gone on in starts a new one, once", async () => {
   const f = worker(failing);
   await until(f, () => failing.results.length === 1);
   assert.deepEqual([failing.results[0].outcome, failing.results[0].error], ["failed", "nope"]);
+});
+
+test("a turn that went on in its session and then broke stays there, and its prompt isn't run again", async () => {
+  // A new session would finish happily, doing the work a second time: only the launch count and the result can tell.
+  const attempt = (name: string, broken: string) => {
+    const launches = join(folder, `${name}.launches`);
+    const script = `echo x >>"${launches}"; if [ -z "$1" ]; then printf 'session=new\\n又做了一遍\\n'; exit 0; fi; printf 'session=old\\nTURN-BEGAN\\n'; ${broken}`;
+    return { given: job({ use: "scripted", command: [script], session: "old" }), launches };
+  };
+  const expect = (hub: ReturnType<typeof fakeHub>, launches: string, error: string) => {
+    assert.deepEqual([hub.results[0].outcome, hub.results[0].error, hub.results[0].session], ["failed", error, "old"]);
+    assert.equal(readFileSync(launches, "utf8"), "x\n", "launched once");
+  };
+
+  const broke = fakeHub();
+  const crash = attempt("broke", 'echo "连接断了" >&2; exit 1');
+  broke.jobs.push(crash.given);
+  const b = worker(broke);
+  await until(b, () => broke.results.length === 1);
+  expect(broke, crash.launches, "连接断了");
+
+  const silent = fakeHub();
+  const quiet = attempt("silent", "exit 0");
+  silent.jobs.push(quiet.given);
+  const s = worker(silent);
+  await until(s, () => silent.results.length === 1);
+  expect(silent, quiet.launches, "没留下结果");
+
+  const vanished = fakeHub();
+  const { hold } = gate("vanished");
+  // The hub hears of the session as soon as it's launched, so that doesn't say the script has got as far as starting.
+  const going = join(folder, "vanished.going");
+  const lost = attempt("vanished", `touch "${going}"; ${hold}`);
+  vanished.jobs.push(lost.given);
+  const v = worker(vanished);
+  await until(v, () => existsSync(going));
+  process.kill(-v.entries()[0].pid!, "SIGKILL");
+  await until(v, () => vanished.results.length === 1);
+  expect(vanished, lost.launches, "没留下结果");
 });
 
 test("the session is told to the hub while it runs, with its link", async () => {

@@ -10,6 +10,8 @@ export default {
     return ["echo", JSON.stringify({ session, text })];
   },
   // Called while it runs too, with code null. A throw here stops the worker, so anything it can't read is an error it returns.
+  // Once your CLI has taken the prompt, return started: true every time, even after it fails: a turn that broke then is
+  // tried again in its session, while one that never got going carries on in a new session.
   read(stdout: string, code: number | null, stderr: string) {
     if (code === null) return {};
     if (code !== 0) return { error: stderr.trim() || `退出码 ${code}` };

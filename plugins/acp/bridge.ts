@@ -97,7 +97,8 @@ export async function bridge(turn: Turn) {
       await rpc("session/load", { sessionId: session, cwd: turn.cwd, mcpServers: [] });
     } else session = (await rpc("session/new", { cwd: turn.cwd, mcpServers: [] })).sessionId;
     if (typeof session !== "string" || !session) throw new Error("ACP 没有返回会话编号");
-    console.log(JSON.stringify({ session }));
+    // Before the prompt goes: the agent can start on it at once, and this has to be there if the bridge is killed then.
+    console.log(JSON.stringify({ session, started: true }));
     collecting = true;
     const prompt = [{ type: "text", text: turn.prompt }];
     const result = await rpc("session/prompt", { sessionId: session, prompt });

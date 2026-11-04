@@ -29,11 +29,13 @@ node --disable-warning=ExperimentalWarning --test --test-name-pattern='agent-aut
 | 导出对象的方法 | 作用 |
 |---|---|
 | `command(turn)` | 返回命令参数数组；参数不作为 shell 代码执行 |
-| `read(stdout, code, stderr)` | 返回 `text`、`session`、`usage`、`error`、`finished`；运行中 `code` 为 `null` |
+| `read(stdout, code, stderr)` | 返回 `text`、`session`、`usage`、`error`、`finished`、`started`；运行中 `code` 为 `null` |
 | `link(session)` | 可选，会话链接；支持会话的插件可只重写错误回执 |
 | `check()` | 可选，能用返回 `null`，否则返回下一步怎么做 |
 
 `turn` 包含 `prompt`、`session`、`resume`、`cwd`、`access`、`model`、`effort`、`command`、`contextFile`、`folder`。`contextFile` 是资料文件，受限 CLI 需要允许读取 `folder`。`read` 要能处理未写完的输出；CLI 真正完成后才返回 `text`。
+
+支持 `resume` 的插件，从 Agent 收下提示词起都要返回 `started: true`，包括运行中和出错之后。否则干到一半断了，也会被当成会话接不上，开新会话把业务重做一遍。
 
 在规则里选择这个插件：
 
