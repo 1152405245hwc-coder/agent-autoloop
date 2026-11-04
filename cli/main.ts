@@ -11,6 +11,7 @@ import { HOME, RULES_FILE } from "../host/home.ts";
 import { installService, removeService, serviceRunning } from "../host/service.ts";
 import { versionLine } from "../host/version.ts";
 import { spendLine } from "./spend.ts";
+import { attemptsOf, newFailure, waitingRetry } from "./try.ts";
 
 const ROOT = path.join(import.meta.dirname, "..");
 const PROGRAM = path.join(ROOT, "bin", "agent-autoloop.ts");
@@ -237,20 +238,26 @@ async function tryIt() {
   if (!config.source) return fail("这台电脑上没有来源的密钥。");
   const owner = ownerClient(config);
   const stamp = Date.now();
+  // A hub that can't be reached is said just below, when the event doesn't go through.
+  const before = await owner.state().catch(() => ({ runs: [] }));
+  const attempts = attemptsOf(before.runs);
   await client(config.source.key, config)
     .event({ id: `try-${stamp}`, type: "try.start", subject: `#${stamp}` })
     .catch((error) => fail(`连不上中台（${error.message}）：先 agent-autoloop up 或 agent-autoloop service install`));
-  console.log("事件发出去了，Agent 开始干活……");
+  const retrying = waitingRetry(before.runs);
+  if (retrying) {
+    const clock = { timeZone: before.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" } as const;
+    const time = new Date(retrying.notBefore).toLocaleString("zh-CN", clock);
+    console.log(`上一次没跑成（${retrying.error}），${time} 会自动再试，这次的事件会一起处理。`);
+  } else console.log("事件发出去了，Agent 开始干活……");
   let asked: number | null = null;
   for (let i = 0; i < 300; i++) {
     await sleep(1000);
     const state = await owner.state();
-    const failed = state.runs.find(
-      (run: { rule: string; state: string; attempts: number; error: string }) =>
-        run.rule === "试一下" && run.state === "queued" && run.attempts > 0,
-    );
+    const failed = newFailure(state.runs, attempts);
     if (failed) return fail(`Agent 没跑成：${failed.error}\n运行 agent-autoloop doctor 看看。`);
     if (asked === null) {
+      // An agent asking the same thing again lands on the card already open, so this may be from before: it's the one.
       const card: Card | undefined = state.cards.find(
         (open: Card) => open.kind === "ask" && open.title.startsWith("试跑"),
       );
