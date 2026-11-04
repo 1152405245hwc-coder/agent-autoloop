@@ -16,6 +16,19 @@ const plistFile = () => path.join(homedir(), "Library/LaunchAgents", `${label()}
 const unitFile = () => path.join(homedir(), ".config/systemd/user", `${label()}.service`);
 const xml = (text: string) => text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
+export type UnitOptions = {
+  home: string;
+  executable: string;
+  program: string;
+};
+
+const systemdItem = (text: string, escapeDollar = false) => {
+  if (/[\u0000-\u001f\u007f]/u.test(text)) throw new Error("systemd unit 的值不能包含控制字符");
+  let escaped = text.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("%", "%%");
+  if (escapeDollar) escaped = escaped.replaceAll("$", () => "$$");
+  return `"${escaped}"`;
+};
+
 export function plist() {
   const logs = path.join(HOME, "logs");
   const systemPaths = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
@@ -39,13 +52,17 @@ export function plist() {
 `;
 }
 
-export function unit() {
+export function unit(options: UnitOptions = { home: HOME, executable: process.execPath, program: PROGRAM }) {
+  const environment = systemdItem(`AGENT_AUTOLOOP_HOME=${options.home}`);
+  const command = [options.executable, "--disable-warning=ExperimentalWarning", options.program, "up"]
+    .map((part) => systemdItem(part, true))
+    .join(" ");
   return `[Unit]
 Description=Agent 自动化中台
 
 [Service]
-Environment=AGENT_AUTOLOOP_HOME=${HOME}
-ExecStart=${process.execPath} --disable-warning=ExperimentalWarning ${PROGRAM} up
+Environment=${environment}
+ExecStart=${command}
 Restart=always
 RestartSec=10
 
@@ -79,7 +96,13 @@ export function installService() {
 
 export function removeService() {
   const file = process.platform === "darwin" ? plistFile() : unitFile();
-  if (!existsSync(file) || !readFileSync(file, "utf8").includes(xml(PROGRAM))) return;
+  if (!existsSync(file)) return;
+  const service = readFileSync(file, "utf8");
+  const ownsService =
+    process.platform === "darwin"
+      ? service.includes(xml(PROGRAM))
+      : service.includes(systemdItem(PROGRAM, true)) || service.includes(PROGRAM);
+  if (!ownsService) return;
   if (process.platform === "darwin") {
     spawnSync("launchctl", ["bootout", `${domain()}/${label()}`], { stdio: "ignore" });
     rmSync(plistFile(), { force: true });
