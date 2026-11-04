@@ -83,7 +83,8 @@ test("Claude Code: reading its result", () => {
   assert.deepEqual(claude.read(`noise\n${line({})}\n`, 0, ""), {
     text: "好了",
     session: "s",
-    usage: { input: 10, output: 2, cached: 6, cost: 0.5 },
+    usage: { input: 10, output: 2, cached: 6 },
+    sessionUsage: { cost: 0.5 },
     finished: true,
   });
   assert.match(
@@ -222,7 +223,7 @@ test("Codex: only a finished turn's last message is its answer", () => {
     session: "t",
     text: "好了",
     finished: true,
-    usage: { input: 9, output: 1, cached: 3 },
+    sessionUsage: { input: 9, output: 1, cached: 3 },
   });
   assert.deepEqual(
     codex.read(lines(started, said("中途")), null, ""),

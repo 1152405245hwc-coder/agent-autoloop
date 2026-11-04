@@ -33,7 +33,7 @@ export default {
     const seen: {
       text?: string;
       session?: string;
-      usage?: object;
+      sessionUsage?: object;
       error?: string;
       finished?: boolean;
       started?: boolean;
@@ -52,7 +52,7 @@ export default {
       else if (event.type === "turn.completed") {
         seen.completed = seen.finished = true;
         const { input_tokens = 0, output_tokens = 0, cached_input_tokens = 0 } = event.usage ?? {};
-        seen.usage = { input: input_tokens, output: output_tokens, cached: cached_input_tokens };
+        seen.sessionUsage = { input: input_tokens, output: output_tokens, cached: cached_input_tokens };
       } else if (event.type === "turn.failed") {
         seen.finished = true;
         seen.error = event.error?.message || "Codex 没跑完这一轮";

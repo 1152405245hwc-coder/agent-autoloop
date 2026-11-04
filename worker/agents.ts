@@ -26,7 +26,10 @@ export type Turn = {
 export type Reading = {
   text?: string;
   session?: string;
+  /** What this launch used. */
   usage?: Usage;
+  /** What the session has used so far, for amounts the program only gives that way. */
+  sessionUsage?: Usage;
   error?: string;
   /** Its turn is over, though it may not have exited. */
   finished?: boolean;
