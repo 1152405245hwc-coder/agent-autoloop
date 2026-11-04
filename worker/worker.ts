@@ -183,6 +183,12 @@ export function createWorker({
   let told = false;
   let tries = 0;
   let blind = false;
+  const said = new Set<string>();
+  /** Trouble that lasts comes round every second, and once in the log will do. */
+  const sayOnce = (line: string) => {
+    if (!said.has(line)) log(line);
+    said.add(line);
+  };
   mkdirSync(RUNS, { recursive: true, mode: 0o700 });
 
   const entries = () =>
@@ -288,13 +294,22 @@ export function createWorker({
 
   function read(entry: Entry, adapter: Adapter, code: number | null): Reading {
     const { out, err } = files(entry);
-    return adapter.read(snapshot(out), code, code === null ? "" : snapshot(err));
+    try {
+      const reading = adapter.read(snapshot(out), code, code === null ? "" : snapshot(err));
+      if (!reading) throw new Error("它什么也没给");
+      return reading;
+    } catch (error) {
+      sayOnce(`run ${entry.run}: couldn't read its output: ${error}`);
+      // One still going goes on, since this says nothing about how it's doing. Whether one that has ended got started isn't
+      // known, and starting it again in a new session could do its work twice: it stays in this one.
+      return { started: true, error: `读不懂这个 Agent 的输出：${(error as Error).message ?? error}` };
+    }
   }
 
   function discardReceipt(entry: Entry, adapter: Adapter, problem: string) {
     const original = { ...entry, turn: entry.turn - entry.repairs };
     const reading = read(original, adapter, 0);
-    const { result } = resultFrom(readMessage(reading.text!), {
+    const { result } = resultFrom(readMessage(reading.text ?? ""), {
       session: reading.session ?? (adapter.link ? entry.session : undefined),
       usage: entry.usage,
     });
@@ -475,10 +490,21 @@ export function createWorker({
     }
   }
 
+  /** Trouble with one run, a folder it can't write to say, is for the next round and holds up no other. */
+  async function eachEntry(step: (entry: Entry) => Promise<unknown>) {
+    for (const entry of entries()) {
+      try {
+        await step(entry);
+      } catch (error) {
+        sayOnce(`run ${entry.run}: ${error}`);
+      }
+    }
+  }
+
   /** One round: look at what's in hand, hand in what's ended, come for more. Whether the hub could be reached. */
   async function tick() {
-    for (const entry of entries()) await check(entry);
-    for (const entry of entries()) await settle(entry);
+    await eachEntry(check);
+    await eachEntry(settle);
     const held = entries();
     let reachable = true;
     try {
@@ -515,6 +541,8 @@ export function createWorker({
 
   async function run(signalled: AbortSignal) {
     log(`worker ${name} started`);
+    // Started again after trouble, it may be what went: nothing else would bring it back, and every round needs it.
+    mkdirSync(RUNS, { recursive: true, mode: 0o700 });
     tidy();
     while (!signalled.aborted) {
       if (!(await tick())) await new Promise((resolve) => setTimeout(resolve, PAUSE));
