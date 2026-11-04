@@ -34,8 +34,11 @@ test("timing stops at the count or the budget, and always takes one sample", asy
   assert.equal((await timed(3, 60_000, async (i) => void seen.push(i))).length, 3);
   assert.deepEqual(seen, [0, 1, 2]);
   assert.equal((await timed(100, 0, () => pause(1))).length, 1);
+  // A busy machine can stretch any pause past the whole budget, so how many fit says nothing. None may start past it.
   const slow = await timed(1000, 30, () => pause(10));
-  assert.ok(slow.length >= 2 && slow.length < 1000, `${slow.length}`);
+  assert.ok(slow.length < 1000, `${slow.length}`);
+  const beforeTheLast = slow.slice(0, -1).reduce((total, ms) => total + ms, 0);
+  assert.ok(beforeTheLast < 30, `${beforeTheLast}`);
   assert.ok(slow.every((ms) => ms >= 5));
 });
 
@@ -46,12 +49,13 @@ test("an early request rejection stays observable until the batch is consumed", 
   assert.deepEqual(await pending, { status: "rejected", reason: failure });
 });
 
-test("budget checks fail on startup, idle memory, durable throughput, latency regressions; simulation speed is observational", () => {
+test("budget checks fail on startup, idle memory, durable throughput, latency, a heartbeat that scans the queue; simulation speed is observational", () => {
   const measured = {
     coldMs: 85,
     idleRssMB: 55,
     durableEventsPerSecond: 2356,
     eventToClaimP99Ms: 1.8,
+    busy: { heartbeatP99Ms: 1.7 },
     simulationStepsPerSecond: 34000,
   };
   checkBudget(measured);
@@ -63,6 +67,7 @@ test("budget checks fail on startup, idle memory, durable throughput, latency re
     eventToClaimP99Ms: 11,
   }))
     assert.throws(() => checkBudget({ ...measured, [key]: value }));
+  assert.throws(() => checkBudget({ ...measured, busy: { heartbeatP99Ms: 11 } }));
 });
 test("dispatch latency includes waking an already waiting worker", async () => {
   let waiting = false;

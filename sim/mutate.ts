@@ -55,13 +55,17 @@ const edits: [string, string, string, string][] = [
     'run.state === "queued" && notBefore > now',
     'run.state === "queued" && notBefore < now',
   ],
+  ["due-after-change", "decide.ts", 'if (!draft.changes.length && type !== "tick")', 'if (type !== "tick")'],
+  ["due-at-tick", "decide.ts", 'if (!draft.changes.length && type !== "tick")', "if (!draft.changes.length)"],
   ["projection-drop", "evolve.ts", "if (row === null)", 'if (row === null || table === "cards")'],
   ["log-order", "store.ts", "ORDER BY seq", "ORDER BY seq DESC"],
   ["stale-commit", "store.ts", "if (latest !== view.seq)", "if (false)"],
   ["log-append", "store.ts", "for (const fact of facts) insert.run", "for (const fact of []) insert.run"],
   ["transaction-removed", "store.ts", "return transaction(db, () => {", "return ((work) => work())(() => {"],
 ];
-const tests = ["kernel", "events", "cards", "runs", "schedule", "stream", "purity"].map((n) => `tests/${n}.test.ts`);
+const tests = ["kernel", "events", "cards", "runs", "schedule", "stream", "purity", "queue-costs"].map(
+  (n) => `tests/${n}.test.ts`,
+);
 export function mutate() {
   const root = join(import.meta.dirname, "..");
   const folder = mkdtempSync(join(tmpdir(), "agent-autoloop-mutation-"));

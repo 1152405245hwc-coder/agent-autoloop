@@ -204,6 +204,7 @@ Apple M5 Pro, 24 GB, Node 24.21.0. Each write is a separate request, acknowledge
 | 1,000 concurrent waiting polls | 170.49 MB RSS |
 | Durable writes | 2,394 events/s |
 | Dispatch p99 | 1.82 ms |
+| Held-back heartbeat p99 with 5,000 queued | 1.66 ms |
 | Startup at 1.1 million facts | 99.8 ms |
 | Kernel lines (with comments and blanks) | 1,651 |
 | Runtime dependencies | 0 |

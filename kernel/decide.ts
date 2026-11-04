@@ -73,6 +73,8 @@ export function decide(view: View, input: Input, now: number, env: Environment):
   const rules = configuration(view);
   const draft: Draft = { view: view.fork(), seq: view.seq + 1, type, now, at: iso(now), env, rules, changes: [] };
   const value = HANDLERS[type](draft, ...args);
+  // With nothing changed nothing new can come due, and what only the clock changes has a deadline of its own to bring a tick.
+  if (!draft.changes.length && type !== "tick") return { facts: [], value };
   const due = deadlines(draft.view, now);
   for (const [key, row] of Object.entries(due)) {
     if (JSON.stringify(draft.view.get("due", key)) !== JSON.stringify(row)) put(draft, "due", key, row);
