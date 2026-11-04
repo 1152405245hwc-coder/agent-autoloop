@@ -213,7 +213,7 @@ export function addKey(kind: KeyKind, name: string, now = Date.now()) {
   return key;
 }
 
-export const removeKey = (kind: KeyKind, name: string) => execute("removeKey", [kind, name]);
+export const removeKey = (kind: KeyKind, name: string) => execute("removeKey", [kind, name]) as boolean;
 export const listKeys = () =>
   all<{ kind: string; name: string; created_at: string }>("SELECT kind,name,created_at FROM keys ORDER BY kind,name");
 export const whose = (kind: string, key: string) => keyHolder(getView(), kind, key);

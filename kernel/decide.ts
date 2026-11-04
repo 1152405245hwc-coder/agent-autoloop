@@ -461,7 +461,11 @@ const HANDLERS: Record<string, (draft: Draft, ...args: any[]) => unknown> = {
   rulesError: (draft, problem) => notify(draft, `rules:${digest(problem)}`, "rules.json 写错了，还在用旧规则", problem),
   key: (draft, kind, name, hash) =>
     void put(draft, "keys", `${kind}:${name}`, { kind, name, hash, created_at: draft.at }),
-  removeKey: (draft, kind, name) => void set(draft, "keys", `${kind}:${name}`, null),
+  removeKey: (draft, kind, name) => {
+    if (!draft.view.get("keys", `${kind}:${name}`)) return false;
+    set(draft, "keys", `${kind}:${name}`, null);
+    return true;
+  },
   ingest,
   createCard,
   tell(draft, key, title, text) {

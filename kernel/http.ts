@@ -210,8 +210,18 @@ async function route(call: Call): Promise<Response> {
   const { method } = request;
   const path = call.url.pathname;
   if (method === "GET" && path === "/healthz") return json({ ok: true, commit: services.commit });
-  const key = /^\/v1\/keys\/(source|worker|channel|owner)\/([a-z][a-z0-9-]*)$/.exec(path);
-  if (method === "DELETE" && key) return ownerAct(call, "removeKey", key[1], key[2]);
+  // A key's name is whatever `key new` was given; it only has to stay one path segment when encoded.
+  const key = /^\/v1\/keys\/(source|worker|channel|owner)\/([^/]+)$/.exec(path);
+  if (method === "DELETE" && key) {
+    requireKey(call, "owner");
+    let name: string;
+    try {
+      name = decodeURIComponent(key[2]);
+    } catch {
+      throw new InputError("密钥名字不正确");
+    }
+    return json({ ok: true, changed: act(call, "removeKey", key[1], name) });
+  }
   const link = CARD_LINK.exec(path);
   if (link && ["GET", "POST"].includes(method)) return cardAtLink(call, link[1]);
   const hook = /^\/v1\/in\/([a-z][a-z0-9-]*)$/.exec(path);

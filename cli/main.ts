@@ -437,8 +437,9 @@ async function check() {
 async function key(args: string[]) {
   const [action, kind, name] = args;
   if (action === "remove") {
-    await ownerClient().removeKey(kind, name);
-    console.log("密钥已失效。");
+    if (!kind || !name) return fail("用法：agent-autoloop key remove <种类> <名字>");
+    const { changed } = await ownerClient().removeKey(kind, name);
+    console.log(changed ? "密钥已失效。" : "没有这把密钥，可能已经删过了。");
     return;
   }
   const { addKey, listKeys } = await import("../host/runtime.ts");
