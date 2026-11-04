@@ -126,17 +126,20 @@ export function reloadRules(file = RULES_FILE) {
     if (loaded.file === file && loaded.mtime === mtime) return { changed: false };
     text = readFileSync(file, "utf8");
   } catch (error) {
-    // Forget the last read: a file moved back keeps its old mtime and must still be read again.
+    // A file moved back keeps its old mtime and must still be read again.
     loaded = { file: "", mtime: 0 };
     return { changed: false, problem: unreadable(file, error as NodeJS.ErrnoException) };
   }
-  loaded = { file, mtime };
+  // Only a read that took effect is remembered. Whatever stopped this one has to be found again: at startup there's nobody
+  // to tell yet, and a database that's busy can take neither the new rules nor the news about bad ones.
+  loaded = { file: "", mtime: 0 };
   try {
     const next = parseRules(text);
     const differs = JSON.stringify(next) !== JSON.stringify(query.configuration(getView()));
     const reportedBroken = (card: Row) => card.key.startsWith("rules:") && card.state === "open";
     if (differs || rows(current, "cards", { state: "open" }).some(reportedBroken)) execute("rules", [next]);
     rules = next;
+    loaded = { file, mtime };
     return { changed: true };
   } catch (error) {
     if (error instanceof RulesError) return { changed: false, problem: error.message };
@@ -176,9 +179,13 @@ export const cancel = (run: number, now = Date.now()) => execute("cancel", [run]
 export const cancels = (worker: string) => query.cancels(getView(), worker);
 export const sweep = (now = Date.now()) => execute("sweep", [], now);
 
+let toldOf: string | undefined;
+
 export function tick(now = Date.now()) {
   const { problem } = reloadRules();
-  if (problem) execute("rulesError", [problem], now);
+  // A file still gone or still wrong is a problem at every tick, and an owner who closed the card has heard.
+  if (problem && problem !== toldOf) execute("rulesError", [problem], now);
+  toldOf = problem;
   execute("tick", [], now);
 }
 

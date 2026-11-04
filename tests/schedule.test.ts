@@ -2,7 +2,8 @@
 // just been changed; a hub asleep through several runs each of them (only the latest is owed) or none; a timer fires early,
 // twice, or doesn't wake its own thread in its session; writing the same key makes a second timer; cancelling leaves it; a
 // fired timer stops a new one being set under its key; a bad rules file stops the hub or isn't told; told every tick, or
-// the card stays after it's fixed; a rules file that is gone stops the hub, or isn't picked up when it's moved back.
+// the card stays after it's fixed; a rules file that is gone stops the hub, or isn't picked up when it's moved back, or
+// brings back a card the owner closed at every tick.
 // Cancelling a timer that isn't waiting spoils the receipt it's in; a timer coming due after its rule has gone stops the
 // clock for everything else, or starts something; a clock set back runs the same scheduled moment a second time.
 import assert from "node:assert/strict";
@@ -247,4 +248,26 @@ test("a rules file that goes away keeps the hub going, says so once, and the car
   renameSync(away, rulesFile);
   tick(at(2));
   assert.equal(cards()[0].state, "closed");
+});
+
+test("a card closed while the rules file is still gone stays closed, and going again after it's back is said again", () => {
+  clean();
+  const away = `${rulesFile}.away`;
+  const cards = () => all<{ id: number; state: string }>("SELECT id, state FROM cards ORDER BY id");
+  renameSync(rulesFile, away);
+  try {
+    tick(at(0));
+    assert.equal(cards().length, 1);
+    execute("answer", [cards()[0].id, { by: "本人" }], at(1));
+    tick(at(2));
+    assert.equal(cards().length, 1, "the owner has heard");
+    renameSync(away, rulesFile);
+    tick(at(3));
+    renameSync(rulesFile, away);
+    tick(at(4));
+    assert.equal(cards().length, 2);
+  } finally {
+    renameSync(away, rulesFile);
+    tick(at(5));
+  }
 });

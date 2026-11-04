@@ -2,6 +2,7 @@
 // replay loses rules, keys or receipts; plaintext capabilities enter the log; projection writes bypass evolve;
 // a crash commits half a receipt; stream loses its cursor; why cannot identify the rule used for a run.
 // Normalizing receipt events must not mutate the request; reconnecting workers must close offline cards without a tick.
+// Closing that card must not bring it straight back, or hide work that comes later for as long as the worker stays away.
 // Rebuilding a projection must hold the same transaction as its log snapshot, or it can overwrite a concurrent receipt.
 // Source event IDs must not collide with internally generated answer or timer IDs.
 // Quiet notices must not escape through a channel; a stale writer must receive Conflict rather than a database failure.
@@ -292,6 +293,95 @@ test("receipt normalization leaves the request unchanged and can be decided twic
   const b = decide(v, input, 2000, environment);
   assert.deepEqual(input, before);
   assert.deepEqual(a, b);
+});
+
+/** A hub with one worker and one rule, and what its card about that worker not connecting has come to. */
+function workerAway() {
+  const local = { ...rules, rules: rules.rules.filter((r) => "source" in r.when) };
+  let v = evolve(empty(), decide(empty(), { type: "rules", args: [local] }, 0, environment).facts);
+  const act = (type: string, args: unknown[], now: number) => {
+    const d = decide(v, { type, args }, now, environment);
+    v = evolve(v, d.facts);
+    return d.value;
+  };
+  return {
+    act,
+    cards: () => rows(v, "cards").filter((card) => card.key.startsWith("worker:w1:offline:")),
+    // The shell's only timer is what's here, so a card nothing comes due for is a card that never appears.
+    dueBy: (now: number) => rows(v, "due").filter((due) => due.kind === "offline" && due.at <= now),
+    waiting: () => rows(v, "runs", { state: "queued" }),
+  };
+}
+
+test("the card about a worker not connecting, once closed, stays closed until the worker has been back", () => {
+  const { act, cards, dueBy } = workerAway();
+  act("heartbeat", ["w1", []], 0);
+  act("ingest", ["app", { id: "x", type: "feedback.new" }], 0);
+  assert.deepEqual(dueBy(600000), []);
+  assert.equal(dueBy(600001).length, 1);
+  act("tick", [], 600001);
+  assert.equal(cards().length, 1);
+  assert.deepEqual(dueBy(Infinity), [], "told, so nothing is left to come due");
+  act("answer", [cards()[0].id, { by: "本人" }], 600002);
+  assert.deepEqual(dueBy(Infinity), [], "nothing comes due to bring it back");
+  act("tick", [], 700000);
+  assert.equal(cards().length, 1, "told once for this work");
+  act("heartbeat", ["w1", []], 800000);
+  assert.equal(dueBy(800000 + 600000).length, 0);
+  assert.equal(dueBy(800000 + 600001).length, 1, "back and gone again comes due by itself");
+  act("tick", [], 800000 + 600001);
+  assert.equal(cards().length, 2, "a new absence is told");
+  assert.equal(cards().filter((card) => card.state === "open").length, 1);
+});
+
+test("the card about a worker that has never connected, once closed, stays closed too", () => {
+  const { act, cards, dueBy } = workerAway();
+  act("ingest", ["app", { id: "x", type: "feedback.new" }], 0);
+  assert.deepEqual(dueBy(600000), []);
+  assert.equal(dueBy(600001).length, 1);
+  act("tick", [], 600001);
+  assert.equal(cards().length, 1);
+  act("answer", [cards()[0].id, { by: "本人" }], 600002);
+  assert.deepEqual(dueBy(Infinity), []);
+  act("tick", [], 700000);
+  assert.equal(cards().length, 1);
+  assert.equal(cards()[0].state, "closed");
+});
+
+test("work that comes after the card was closed is told, whether or not the worker was ever seen", () => {
+  for (const seen of [true, false]) {
+    const { act, cards, dueBy, waiting } = workerAway();
+    if (seen) act("heartbeat", ["w1", []], 0);
+    act("ingest", ["app", { id: "x", type: "feedback.new" }], 0);
+    act("tick", [], 600001);
+    act("answer", [cards()[0].id, { by: "本人" }], 600002);
+    act("cancel", [waiting()[0].id], 700000);
+    act("tick", [], 700000);
+    assert.equal(cards().length, 1, "nothing is waiting");
+
+    const later = 7 * 24 * 60 * 60_000;
+    act("ingest", ["app", { id: "y", type: "feedback.new" }], later);
+    const whenDue = seen ? later : later + 600001;
+    assert.deepEqual(dueBy(whenDue - 1), []);
+    assert.equal(dueBy(whenDue).length, 1, "it comes due by itself");
+    act("tick", [], whenDue);
+    assert.equal(cards().length, 2);
+    assert.equal(cards()[1].state, "open");
+    assert.match(cards()[1].text, /1 件任务/);
+    assert.deepEqual(dueBy(Infinity), [], "told, so nothing is left to come due");
+  }
+});
+
+test("more for the work the owner already closed the card on isn't news", () => {
+  const { act, cards, dueBy } = workerAway();
+  act("heartbeat", ["w1", []], 0);
+  act("ingest", ["app", { id: "x", type: "feedback.new" }], 0);
+  act("tick", [], 600001);
+  act("answer", [cards()[0].id, { by: "本人" }], 600002);
+  act("ingest", ["app", { id: "y", type: "feedback.new" }], 700000);
+  assert.deepEqual(dueBy(Infinity), []);
+  act("tick", [], 700000);
+  assert.equal(cards().length, 1);
 });
 
 test("a worker heartbeat closes its offline card with no later scheduled work", () => {

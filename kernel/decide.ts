@@ -2,7 +2,7 @@
 // to give. Time and secrets come in as arguments, so the same input on the same view always decides the same.
 import { credential, digest, type Environment } from "./credentials.ts";
 import { latestBefore, nextRun, parseCron } from "./cron.ts";
-import { deadlines, MINUTE, OFFLINE_AFTER, RUN_LEASE, SEEN_EVERY, WORKER_FRESH } from "./due.ts";
+import { deadlines, MINUTE, offlineCard, OFFLINE_AFTER, RUN_LEASE, SEEN_EVERY, WORKER_FRESH } from "./due.ts";
 import { AuthError, Conflict, InputError, NotFound } from "./errors.ts";
 import { iso, rows, type Change, type Fact, type Row, type Table, type View } from "./evolve.ts";
 import {
@@ -241,14 +241,14 @@ function sweep(draft: Draft) {
     const waiting = waitingOn(draft.view, worker, now);
     if (!waiting.length) continue;
     const since = now - (lastSeen ?? Date.parse(waiting[0].created_at));
-    if (since <= OFFLINE_AFTER) continue;
+    const { key, told } = offlineCard(draft.view, worker, waiting);
+    if (since <= OFFLINE_AFTER || told) continue;
     const minutes = Math.floor(since / MINUTE);
     const neverSeen = lastSeen === undefined;
     const situation = neverSeen
       ? `${worker} 一直没连上中台，有 ${waiting.length} 件任务等了 ${minutes} 分钟没人接`
       : `${worker} 已经 ${minutes} 分钟没连上中台，有 ${waiting.length} 件任务在排队或在跑`;
     const check = neverSeen ? "有没有开机联网" : "是不是关机、休眠或断网了";
-    const key = `worker:${worker}:offline:${neverSeen ? "never" : iso(lastSeen)}`;
     notify(draft, key, "接单程序没连上", `${situation}（请看一眼那台电脑${check}）。`);
   }
 }

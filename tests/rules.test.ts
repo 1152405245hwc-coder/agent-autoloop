@@ -7,10 +7,11 @@
 // there; a scheduled task shown on the page naming a source or agent that isn't there or a malformed schedule; a time zone
 // that doesn't exist; the reserved source redefined; a null rule crashes reload instead of keeping the old rules.
 // A good file changing on disk takes effect; a bad one doesn't, and says why. A file that is gone or can't be read
-// crashes the hub, at reload or at restart, instead of keeping the rules it had.
+// crashes the hub, at reload or at restart, instead of keeping the rules it had. A file broken while the hub was down
+// is never told, because nothing about it changes after startup has read it.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { setup } from "./helpers.ts";
@@ -194,6 +195,37 @@ test("a rules file that can't be read is a problem, not a crash, and the old rul
   assert.match(answer.problem!, /找不到/);
   assert.equal(ruleNamed("意见")!.prompt, "新的说法。");
   assert.match(reloadRules(home).problem!, /读不到/, "a folder where the file should be");
+});
+
+test("a rules file broken while the hub was down is told at the first tick, unless it's fixed by then", () => {
+  const down = join(home, "down");
+  mkdirSync(down);
+  const file = join(down, "rules.json");
+  const start = (afterStarting = "") => {
+    const started = spawnSync(
+      process.execPath,
+      [
+        "--disable-warning=ExperimentalWarning",
+        "--input-type=module",
+        "-e",
+        `const hub = await import(${JSON.stringify(new URL("../host/runtime.ts", import.meta.url).href)});` +
+          `const { rows } = await import(${JSON.stringify(new URL("../kernel/evolve.ts", import.meta.url).href)});` +
+          `${afterStarting}; hub.tick();` +
+          `console.log(JSON.stringify(rows(hub.getView(), "cards", { state: "open" }).map((card) => card.title)))`,
+      ],
+      { env: { ...process.env, AGENT_AUTOLOOP_HOME: down, AGENT_AUTOLOOP_RULES: file }, encoding: "utf8" },
+    );
+    assert.equal(started.status, 0, started.stderr);
+    return JSON.parse(started.stdout);
+  };
+  writeFileSync(file, JSON.stringify(good()));
+  assert.deepEqual(start(), []);
+  const broken = good();
+  broken.rules[0].to = "nobody";
+  writeFileSync(file, JSON.stringify(broken));
+  assert.deepEqual(start(), ["rules.json 写错了，还在用旧规则"]);
+  const fix = `(await import("node:fs")).writeFileSync(${JSON.stringify(file)}, ${JSON.stringify(JSON.stringify(good()))})`;
+  assert.deepEqual(start(fix), [], "fixed by then, and the card from before is gone too");
 });
 
 test("a hub restarting without its rules file comes up on the rules it had; a new one without any says why", () => {
