@@ -4,7 +4,7 @@
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadChannel } from "./channels.ts";
-import { readConfig, type ChannelConfig } from "./config.ts";
+import { parseListen, readConfig, type ChannelConfig } from "./config.ts";
 import { HOME } from "./home.ts";
 import { runningUp } from "./service.ts";
 import { commitOf } from "./version.ts";
@@ -60,11 +60,14 @@ export async function up() {
   let close = () => {};
   if (config.hub) {
     loadSecrets();
-    const [host, port] = config.hub.listen.split(":");
+    const { host, port } = parseListen(config.hub.listen);
     process.env.AGENT_AUTOLOOP_PUBLIC_URL = config.hub.publicUrl ?? `http://${config.hub.listen}`;
     const { serve } = await import("./http.ts");
     const say = log("hub");
-    const server = serve(Number(port), host, { commit: commitOf() });
+    if (!["127.0.0.1", "localhost", "::1"].includes(host)) {
+      say(`${host} 不是本机回环地址，中台会向这个地址所在的网络开放；前面要有 HTTPS 反向代理`);
+    }
+    const server = serve(port, host, { commit: commitOf() });
     server.on("listening", () => say(`listening on ${config.hub!.listen}`));
     server.on("error", (error) => {
       say(`can't listen: ${error}`);
