@@ -12,7 +12,7 @@ import { evolve, rows, keyOf, statement, type Fact, type Row, type Table } from 
 import * as query from "../kernel/query.ts";
 import { eventRule, typeMatches } from "../kernel/rules.ts";
 import { stateOf as state } from "../kernel/state.ts";
-import { commit, openView } from "../kernel/store.ts";
+import { commitLatest, openView } from "../kernel/store.ts";
 import type { Job } from "../protocol/job.ts";
 import { parseRules as checkRules, RulesError } from "../protocol/rules.ts";
 import type { Rejected } from "../protocol/validate.ts";
@@ -104,8 +104,7 @@ export const onChange = (listener: Listener) => {
 export function execute(type: string, args: any[], now = Date.now()) {
   let facts: Fact[] = [];
   let value: any;
-  const latest = getView();
-  current = commit(db, latest, () => {
+  current = commitLatest(db, format, (latest) => {
     ({ facts, value } = decide(latest, { type, args }, now, environment));
     return facts;
   });
