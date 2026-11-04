@@ -80,7 +80,7 @@ Claude 委托 Codex 的完整规则、Skill 和参数调用脚本见[浏览器�
 { "cards": { "use": "hello-channel", "key": "通道密钥", "file": "/tmp/cards.txt" } }
 ```
 
-能收回调的通道要在规则里设置 `answerers`；只能发文字的通道设置 `links: true`，发送 `card.link`。拿到链接的人能回答这张卡片。
+能收回调的通道要在规则里设置 `answerers`，没设时通道里谁都能回答，`doctor` 会提醒；只能发文字的通道设置 `links: true`，发送 `card.link`。拿到链接的人能回答这张卡片。
 
 通道和中台共用一个 Node 进程，外部调用应异步等待。内置飞书通道的用户查询、发送和更新均异步调用 CLI，发送期间中台仍能接收事件和心跳。
 

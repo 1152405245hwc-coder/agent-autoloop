@@ -400,8 +400,14 @@ async function doctor() {
   if (config.hub) {
     const { parseRules } = await importRules();
     try {
-      parseRules(readFileSync(RULES_FILE, "utf8"));
+      const { channels } = parseRules(readFileSync(RULES_FILE, "utf8"));
       say(true, `规则 ${RULES_FILE}`);
+      for (const [id, channel] of Object.entries(channels)) {
+        // Nobody answers from a desktop notification, and a link goes only to whoever it's sent to.
+        if (id !== "desktop" && !channel.links && !channel.answerers) {
+          console.log(`○ ${channel.name}没写 answerers：这个通道里谁都能回答卡片。`);
+        }
+      }
     } catch (error) {
       say(false, (error as Error).message);
     }
