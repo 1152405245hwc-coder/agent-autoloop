@@ -325,7 +325,7 @@ test("a card's link is a plain page: it shows that card as words, runs nothing, 
   assert.equal((await call(`${path}.json`)).status, 404);
 });
 
-test("a card's link takes words of your own, and a notice has one button", async () => {
+test("a card's link takes words of your own, and a notice takes a line of its own", async () => {
   const asked = await linkFor(61, {
     ask: [{ title: "别的想法", text: "选一个", options: ["甲", "乙"], key: "words" }],
   });
@@ -334,10 +334,19 @@ test("a card's link takes words of your own, and a notice has one button", async
   assert.ok((await call(asked.path)).text.includes("你选了「都不要」"));
   const told = await linkFor(62, { notice: [{ title: "留意一下", text: "磁盘快满了", key: "disk" }] });
   const page = await call(told.path);
-  assert.equal(page.text.split("<form").length - 1, 1);
+  assert.equal(page.text.split("<form").length - 1, 2);
   assert.ok(page.text.includes("已处理"));
-  assert.equal((await form(told.path, "choice=0")).status, 303);
+  assert.ok(page.text.includes("记录并结案"), "a notice can be settled with a line of your own");
+  assert.equal((await form(told.path, `text=${encodeURIComponent("清了 3GB 缓存")}`)).status, 303);
   assert.equal(stored(told.id).state, "closed");
+  assert.equal(stored(told.id).answer, "清了 3GB 缓存", "the line is kept with the card");
+  assert.ok((await call(told.path)).text.includes("处理说明：清了 3GB 缓存"));
+  const silent = await linkFor(63, { notice: [{ title: "又是他", text: "群发广告", key: "ad" }] });
+  assert.equal((await form(silent.path, "choice=0")).status, 303);
+  assert.deepEqual([stored(silent.id).state, stored(silent.id).answer], ["closed", null]);
+  const long = await linkFor(64, { notice: [{ title: "太长", text: "说明太长", key: "long" }] });
+  assert.equal((await form(long.path, `text=${"字".repeat(4001)}`)).status, 400);
+  assert.equal(stored(long.id).state, "open", "too long is refused, not cut short");
 });
 
 test("someone else's webhook goes through its source's adapter: signed, or not taken", async () => {

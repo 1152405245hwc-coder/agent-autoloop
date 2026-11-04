@@ -114,9 +114,10 @@ function assignQueued(draft: Draft, run: Row) {
 const threadOf = (run: Row) => ({ rule: run.rule, lane: run.lane, grp: run.grp });
 const hopsOf = (draft: Draft, run: Row) => Math.max(0, ...eventsOf(draft.view, run.id).map((event) => event.hops ?? 0));
 
-function closeCard(draft: Draft, card: Row, result: string, by: string | null = null) {
+function closeCard(draft: Draft, card: Row, result: string, by: string | null = null, note: string | null = null) {
   const closed = { state: "closed", closed_at: draft.at, version: card.version + 1 };
-  put(draft, "cards", card.id, { ...closed, result, by: by ?? card.by });
+  // A note says how a notice was handled, for looking back at later.
+  put(draft, "cards", card.id, { ...closed, result, by: by ?? card.by, ...(note ? { answer: note } : {}) });
 }
 
 function closeOpen(draft: Draft, matches: (key: string) => boolean, result: string) {
@@ -428,7 +429,10 @@ function answer(draft: Draft, id: number, given: Row) {
     throw new InputError(`消息编号最多 ${ANSWER_REF} 字`);
   }
   if (card.kind === "notice") {
-    closeCard(draft, card, "已处理", given.by ?? null);
+    if (given.text !== undefined && typeof given.text !== "string") throw new InputError("处理说明要是文字");
+    const note = given.text?.trim() || null;
+    if (note !== null && [...note].length > ANSWER_TEXT) throw new InputError(`处理说明最多 ${ANSWER_TEXT} 字`);
+    closeCard(draft, card, "已处理", given.by ?? null, note);
     return { changed: true, state: "closed" };
   }
   if (given.text !== undefined && typeof given.text !== "string") throw new InputError("回答要是文字");
