@@ -7,17 +7,7 @@
 // started again; losing the place the log goes makes the error about it go round for ever, with the hub no longer answering.
 import assert from "node:assert/strict";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -178,7 +168,9 @@ test("a worker that stops is started again, and the hub stays up", async () => {
   await until(() => answers(it.port), "中台应答");
   assert.equal(it.cli("emit", "try.start", "--subject", "#1").status, 0);
   const runs = join(it.home, "worker", "runs");
-  await until(() => existsSync(runs) && readdirSync(runs).length > 0, "这一轮开始");
+  // Started and not just about to: one that can't write to its folder while starting counts as the hub being out of reach,
+  // and that waits 30 seconds before the next round.
+  await until(() => it.said().includes("turn 1 started"), "这一轮开始");
   // With a run in hand it comes round every second, and something in the way of its folder stops the next round.
   rmSync(runs, { recursive: true, force: true });
   writeFileSync(runs, "");
