@@ -5,6 +5,7 @@
 // Rebuilding a projection must hold the same transaction as its log snapshot, or it can overwrite a concurrent receipt.
 // Source event IDs must not collide with internally generated answer or timer IDs.
 // Quiet notices must not escape through a channel; a stale writer must receive Conflict rather than a database failure.
+// A queued run whose rule was removed or renamed waits for good, unnoticed, because nothing can claim it.
 // Existing logs can contain a queued run with an old agent after a rules change; replay must retain claimed configurations.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -86,6 +87,61 @@ test("old logs with stale queued routing claim the current configuration and rep
     } finally {
       rebuilt.close();
     }
+  } finally {
+    view.close();
+  }
+});
+test("a queued run whose rule is gone stops and says so, and the rest of the queue goes on", () => {
+  let view = seeded();
+  const act = (type: string, ...args: unknown[]) => {
+    const decided = decide(view, { type, args }, 1000, environment);
+    view = evolve(view, decided.facts);
+    return decided.value;
+  };
+  try {
+    act("ingest", "app", { id: "gone", type: "feedback.new" });
+    act("ingest", "ops", { id: "stays", type: "alert.raised" });
+    const [gone] = rows(view, "runs", { rule: "意见" });
+    const [stays] = rows(view, "runs", { rule: "告警" });
+    const renamed = structuredClone(rules);
+    renamed.rules.find((rule: { name: string }) => rule.name === "意见")!.name = "新名字";
+    act("rules", renamed);
+    const stopped = view.get("runs", gone.id)!;
+    assert.equal(stopped.state, "cancelled");
+    assert.ok(stopped.finished_at);
+    assert.match(stopped.summary, /规则「意见」不在了/);
+    assert.equal(view.get("runs", stays.id)!.state, "queued");
+    const open = rows(view, "cards", { state: "open" });
+    assert.deepEqual(
+      open.map((card) => card.key),
+      [`run:${gone.id}:rule-gone`],
+    );
+    assert.match(open[0].text, /规则「意见」不在了/);
+    act("rules", renamed);
+    assert.equal(rows(view, "cards", { state: "open" }).length, 1, "told once");
+  } finally {
+    view.close();
+  }
+});
+test("a run already going when its rule goes finishes normally, and if it fails it stops rather than waits", () => {
+  let view = seeded();
+  const act = (type: string, ...args: unknown[]) => {
+    const decided = decide(view, { type, args }, 1000, environment);
+    view = evolve(view, decided.facts);
+    return decided.value;
+  };
+  try {
+    act("ingest", "app", { id: "held", type: "feedback.new" });
+    const job = act("claimNext", "w1", "claim");
+    const renamed = structuredClone(rules);
+    renamed.rules.find((rule: { name: string }) => rule.name === "意见")!.name = "新名字";
+    act("rules", renamed);
+    assert.equal(view.get("runs", job.run)!.state, "claimed");
+    act("finish", job.run, job.token, { outcome: "failed", error: "没跑成" });
+    const stopped = view.get("runs", job.run)!;
+    assert.equal(stopped.state, "cancelled");
+    assert.deepEqual([stopped.attempts, stopped.error, stopped.claim], [1, "没跑成", null]);
+    assert.equal(rows(view, "cards", { key: `run:${job.run}:rule-gone` }).length, 1);
   } finally {
     view.close();
   }
