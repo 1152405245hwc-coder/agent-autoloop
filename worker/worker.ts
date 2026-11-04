@@ -101,7 +101,9 @@ const files = (entry: Entry) => ({
   out: path.join(entry.dir, `stdout-${entry.turn}.log`),
   err: path.join(entry.dir, `stderr-${entry.turn}.log`),
   exit: path.join(entry.dir, `exit-${entry.turn}`),
+  command: path.join(entry.dir, `command-${entry.turn}.sh`),
 });
+const quoted = (word: string) => `'${word.replaceAll("'", `'\\''`)}'`;
 const marker = (entry: Entry) => `agent-autoloop-run:${entry.run}:${entry.attempt}:${entry.turn}`;
 
 function alive(entry: Entry) {
@@ -196,7 +198,10 @@ export function createWorker({
     };
     if (!existsSync(cwd)) throw new Error(`在 ${cwd} 启动不了：这个目录不存在`);
     const argv = adapter.command(turn);
-    const { out, err, exit } = files(entry);
+    const { out, err, exit, command } = files(entry);
+    // Login shells don't agree on how a command reads its arguments (fish has no $0 or $@), so the command waits in a
+    // file for /bin/sh. Its path travels by environment because the install path can hold any character.
+    writeFileSync(command, `unset AGENT_AUTOLOOP_COMMAND\nexec ${argv.map(quoted).join(" ")}\n`, { mode: 0o600 });
     // Output and the exit code go through the shell, so they land in their files even if this program has gone by then.
     const script = [
       "out=$1",
@@ -211,10 +216,10 @@ export function createWorker({
       ":",
     ].join("\n");
     // The login shell gives it the PATH and sign-in its owner has in a terminal; launchd and systemd give neither.
-    const login = [process.env.SHELL ?? "/bin/sh", "-lc", 'exec "$0" "$@"'];
-    const child = spawn("/bin/sh", ["-c", script, marker(entry), out, err, exit, ...login, ...argv], {
+    const login = [process.env.SHELL ?? "/bin/sh", "-lc", 'exec /bin/sh "$AGENT_AUTOLOOP_COMMAND"'];
+    const child = spawn("/bin/sh", ["-c", script, marker(entry), out, err, exit, ...login], {
       cwd,
-      env: agentEnvironment(entry),
+      env: { ...agentEnvironment(entry), AGENT_AUTOLOOP_COMMAND: command },
       detached: true,
       stdio: "ignore",
     });
