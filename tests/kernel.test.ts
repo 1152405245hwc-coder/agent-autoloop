@@ -6,6 +6,7 @@
 // Source event IDs must not collide with internally generated answer or timer IDs.
 // Quiet notices must not escape through a channel; a stale writer must receive Conflict rather than a database failure.
 // A queued run whose rule was removed or renamed waits for good, unnoticed, because nothing can claim it.
+// A run stopped by its failed receipt puts that receipt's usage, session and dedupe mark back to what they were before it.
 // Existing logs can contain a queued run with an old agent after a rules change; replay must retain claimed configurations.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -142,6 +143,30 @@ test("a run already going when its rule goes finishes normally, and if it fails 
     assert.equal(stopped.state, "cancelled");
     assert.deepEqual([stopped.attempts, stopped.error, stopped.claim], [1, "没跑成", null]);
     assert.equal(rows(view, "cards", { key: `run:${job.run}:rule-gone` }).length, 1);
+  } finally {
+    view.close();
+  }
+});
+test("a run stopped by its failed receipt keeps that receipt's usage, session and dedupe mark", () => {
+  let view = seeded();
+  const act = (type: string, ...args: unknown[]) => {
+    const decided = decide(view, { type, args }, 1000, environment);
+    view = evolve(view, decided.facts);
+    return decided.value;
+  };
+  try {
+    act("ingest", "app", { id: "held", type: "feedback.new" });
+    const job = act("claimNext", "w1", "claim");
+    const renamed = structuredClone(rules);
+    renamed.rules.find((rule: { name: string }) => rule.name === "意见")!.name = "新名字";
+    act("rules", renamed);
+    const receipt = { outcome: "failed", error: "没跑成", session: "s1", usage: { input: 5 } };
+    act("finish", job.run, job.token, receipt);
+    const stopped = view.get("runs", job.run)!;
+    assert.equal(stopped.state, "cancelled");
+    assert.equal(stopped.session, "s1");
+    assert.deepEqual(JSON.parse(stopped.usage).input, 5);
+    assert.equal(act("finish", job.run, job.token, receipt).duplicate, true);
   } finally {
     view.close();
   }

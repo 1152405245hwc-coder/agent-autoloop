@@ -277,7 +277,7 @@ function claimNext(draft: Draft, worker: string, claim: string) {
 
 /** Ends a run nothing will pick up again, and says so. */
 function stopRun(draft: Draft, run: Row, why: string, summary: string, words: string) {
-  put(draft, "runs", run.id, { ...run, state: "cancelled", finished_at: draft.at, summary });
+  put(draft, "runs", run.id, { state: "cancelled", finished_at: draft.at, summary });
   notify(draft, `run:${run.id}:${why}`, run.rule, words, threadOf(run));
 }
 
@@ -300,7 +300,8 @@ function retryLater(draft: Draft, run: Row, result: Result) {
   for (const notice of result.notice ?? []) cardFromReceipt(draft, run, "notice", notice);
   const failure = { attempts, error, ...unclaimed };
   if (!ruleNamed(draft, run.rule)) {
-    stopRun(draft, { ...run, ...failure }, "rule-gone", ...ruleGone(run));
+    put(draft, "runs", id, failure);
+    stopRun(draft, run, "rule-gone", ...ruleGone(run));
     return rejected;
   }
   if (attempts >= MAX_ATTEMPTS) {
@@ -308,7 +309,8 @@ function retryLater(draft: Draft, run: Row, result: Result) {
     const summary = `连续 ${MAX_ATTEMPTS} 次没跑成，不再自动重试`;
     closeOpen(draft, (key) => key === `run:${id}:failing`, summary);
     const words = `连续 ${MAX_ATTEMPTS} 次自动处理没跑完（卡在：${error}），不再自动重试。解决后重新触发这件事，它会从头开始。`;
-    stopRun(draft, { ...run, ...failure }, "stopped", summary, words);
+    put(draft, "runs", id, failure);
+    stopRun(draft, run, "stopped", summary, words);
     return rejected;
   }
   put(draft, "runs", id, { state: "queued", not_before: iso(notBefore), ...failure });
