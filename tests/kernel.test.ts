@@ -8,12 +8,18 @@
 // A queued run whose rule was removed or renamed waits for good, unnoticed, because nothing can claim it.
 // A run stopped by its failed receipt puts that receipt's usage, session and dedupe mark back to what they were before it.
 // Existing logs can contain a queued run with an old agent after a rules change; replay must retain claimed configurations.
+// An input the kernel doesn't have must be refused, even one named like something every object inherits.
+// A deadline nothing will move on again has the shell's one timer firing at once for good: a schedule whose rule is gone or
+// no longer scheduled, a resend whose time has passed with the channel gone. A resend must also come due at its time, or
+// a channel waiting for the next card isn't woken for it.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { empty, evolve, rows, snapshot, type Fact } from "../kernel/evolve.ts";
 import { decide } from "../kernel/decide.ts";
+import { InputError } from "../kernel/errors.ts";
 import { parseRules } from "../protocol/rules.ts";
+import { at } from "./helpers.ts";
 
 const environment = { secret: "simulation-secret", publicUrl: "https://hub.test" };
 const rules = parseRules(readFileSync(new URL("./rules.fixture.json", import.meta.url), "utf8"), 0, "UTC");
@@ -207,6 +213,65 @@ test("one due table retains cron, retry, timer and offline deadlines without per
   act("finish", [job.run, job.token, { outcome: "failed" }], 2000);
   assert.ok(rows(v, "due").some((d) => d.kind === "retry" && d.at === 302000));
   assert.deepEqual(decide(v, { type: "tick", args: [] }, 2000, environment).facts, []);
+});
+
+test("a schedule whose rule is gone or no longer scheduled stops coming due", () => {
+  let v = seeded();
+  const act = (type: string, args: unknown[], now: number) => {
+    v = evolve(v, decide(v, { type, args }, now, environment).facts);
+  };
+  act("tick", [], 1000);
+  const schedules = () =>
+    rows(v, "due")
+      .filter((due) => due.kind === "cron")
+      .map((due) => due.key)
+      .sort();
+  assert.deepEqual(schedules(), ["巡检", "早报"].sort());
+  const withoutMorning = rules.rules.filter((rule) => rule.name !== "早报");
+  act("rules", [{ ...rules, rules: withoutMorning }], 2000);
+  assert.deepEqual(schedules(), ["巡检"]);
+  const unscheduled = withoutMorning.map((rule) =>
+    rule.name === "巡检" ? { ...rule, when: { source: "app", types: ["poll.done"] } } : rule,
+  );
+  act("rules", [{ ...rules, rules: unscheduled }], 3000);
+  assert.deepEqual(schedules(), []);
+  // Nothing moves their next time on any more, so past it they would be overdue on every tick from then on.
+  act("tick", [], 30 * 24 * 3600_000);
+  assert.deepEqual(schedules(), []);
+});
+
+test("a card's resend comes due at its time, and stops being due once that's passed, it's sent, or it's given up", () => {
+  let v = seeded();
+  const act = (type: string, args: unknown[], now: number) => {
+    const d = decide(v, { type, args }, now, environment);
+    v = evolve(v, d.facts);
+    return d.value;
+  };
+  const { card } = act("tell", ["k", "应用", "周报"], at(0));
+  const resendAt = (id = card) => rows(v, "due").find((due) => due.kind === "delivery" && due.key === `${id}:chat`)?.at;
+  // Taken and not heard of again: a channel waiting for the next card wakes when this one can go again. The channel may be
+  // gone by then, so the deadline can't stay behind.
+  act("nextCard", ["chat"], at(0));
+  assert.equal(resendAt(), at(1));
+  act("tick", [], at(1));
+  assert.equal(resendAt(), undefined);
+  const tries = [1, 3, 7, 15, 25, 35, 45, 55];
+  for (const [n, minute] of tries.entries()) {
+    const { version } = act("nextCard", ["chat"], at(minute));
+    act("failed", ["chat", card, version, "挂了"], at(minute));
+    assert.equal(resendAt(), n + 1 < tries.length ? at(tries[n + 1]) : undefined, `after the try at ${minute}`);
+  }
+  const { card: sent } = act("tell", ["k2", "应用", "月报"], at(60));
+  const { version } = act("nextCard", ["chat"], at(60));
+  assert.equal(resendAt(sent), at(61));
+  act("delivered", ["chat", sent, version, "om_1"], at(60));
+  assert.equal(resendAt(sent), undefined);
+});
+
+test("an input the kernel doesn't have is refused, even one named like something every object has", () => {
+  const view = seeded();
+  for (const type of ["nope", "constructor", "toString"])
+    assert.throws(() => decide(view, { type, args: [] }, 1000, environment), InputError, type);
 });
 
 test("receipt normalization leaves the request unchanged and can be decided twice", () => {

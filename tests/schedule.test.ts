@@ -3,6 +3,8 @@
 // twice, or doesn't wake its own thread in its session; writing the same key makes a second timer; cancelling leaves it; a
 // fired timer stops a new one being set under its key; a bad rules file stops the hub or isn't told; told every tick, or
 // the card stays after it's fixed; a rules file that is gone stops the hub, or isn't picked up when it's moved back.
+// Cancelling a timer that isn't waiting spoils the receipt it's in; a timer coming due after its rule has gone stops the
+// clock for everything else, or starts something; a clock set back runs the same scheduled moment a second time.
 import assert from "node:assert/strict";
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -13,7 +15,7 @@ const home = setup("schedule");
 const rulesFile = join(home, "rules.json");
 writeFileSync(rulesFile, readFileSync(process.env.AGENT_AUTOLOOP_RULES!, "utf8"));
 process.env.AGENT_AUTOLOOP_RULES = rulesFile;
-const { tick } = await import("../host/runtime.ts");
+const { execute, getView, tick } = await import("../host/runtime.ts");
 const { ingest } = await import("../host/runtime.ts");
 const { claimNext, finish, started, heartbeat } = await import("../host/runtime.ts");
 const { all, one, run } = await import("./storage.ts");
@@ -154,6 +156,62 @@ test("the same key moves a timer; another thread has its own; a run sees what's 
     all<{ lane: string }>("SELECT lane FROM timers").map((t) => t.lane),
     ["#2"],
   );
+});
+
+test("cancelling a look-again that isn't waiting changes nothing, and the rest of the receipt counts", () => {
+  clean();
+  ingest("app", { id: "1", type: "feedback.new", subject: "#1" }, at(0));
+  const job = claim("w1", at(0))!;
+  const later = [
+    { key: "never-set", cancel: true },
+    { key: "kept", at: new Date(at(100)).toISOString(), about: "再看" },
+  ];
+  assert.deepEqual(finish(job.run, job.token, { outcome: "done", summary: "好了", later }, at(1)).rejected, []);
+  assert.equal(one<{ state: string }>("SELECT state FROM runs WHERE id = ?", [job.run])!.state, "done");
+  assert.deepEqual(
+    all<{ key: string }>("SELECT key FROM timers").map((t) => t.key),
+    ["kept"],
+  );
+});
+
+test("a look-again coming due after its rule has gone is kept on record, starts nothing and doesn't stop the clock", () => {
+  clean();
+  ingest("app", { id: "1", type: "feedback.new", subject: "#1" }, at(0));
+  const job = claim("w1", at(0))!;
+  const later = [{ key: "recheck", at: new Date(at(60)).toISOString(), about: "看原站恢复了没有" }];
+  finish(job.run, job.token, { outcome: "done", later }, at(1));
+  const before = getView().get("config", "rules")!.value;
+  const rules = before.rules.filter((rule: { name: string }) => rule.name !== "意见");
+  execute("rules", [{ ...before, rules }], at(2));
+  try {
+    tick(at(60));
+    const event = one<{ routed: string }>("SELECT routed FROM events WHERE type = 'timer.due'")!;
+    assert.deepEqual(JSON.parse(event.routed), []);
+    assert.deepEqual(all("SELECT id FROM timers WHERE event_id IS NULL"), [], "it doesn't come due again");
+    assert.deepEqual(all("SELECT id FROM runs WHERE rule = '意见' AND state = 'queued'"), []);
+  } finally {
+    execute("rules", [before], at(61));
+  }
+});
+
+test("a clock set back doesn't run the same scheduled moment twice, even with the schedule changed meanwhile", () => {
+  clean();
+  tick(at(0));
+  tick(at(5));
+  assert.deepEqual(ticks(), ["巡检@2026-10-18T02:05:00.000Z"]);
+  const before = getView().get("config", "rules")!.value;
+  const rules = before.rules.map((rule: { name: string }) =>
+    rule.name === "巡检" ? { ...rule, when: { cron: "5 10 * * *" } } : rule,
+  );
+  // Back at 10:02, a schedule that also reads 10:05 starts counting from there.
+  execute("rules", [{ ...before, rules }], at(2));
+  try {
+    tick(at(2));
+    tick(at(5));
+    assert.deepEqual(ticks(), ["巡检@2026-10-18T02:05:00.000Z"]);
+  } finally {
+    execute("rules", [before], at(6));
+  }
 });
 
 test("a bad rules file keeps the hub going, says so once, and the card closes when it's fixed", () => {
