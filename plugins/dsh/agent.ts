@@ -87,7 +87,7 @@ export default {
       });
       // The options this needs came in 0.2.2, and npm's `latest` is behind that for now.
       if (!help.includes("--approval-policy"))
-        return "DSH 版本太旧，要 0.2.2 或更新：npm install -g @deepseek-ai/dsh@next";
+        return "DSH 版本太旧，要 0.2.2 或更新：npm install -g @deepseek-ai/dsh@next --allow-scripts=koffi,node-pty,@deepseek-ai/dsh-subprocess-local";
       return null;
     } catch (error) {
       return `DSH 用不了：运行 dsh headless "hi" 看看（${(error as Error).message.split("\n")[0]}）`;
