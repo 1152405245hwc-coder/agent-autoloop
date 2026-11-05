@@ -1,9 +1,10 @@
 #!/bin/sh
-# Says how much CI a run needs, as scope=docs, normal, kernel or full. The slow simulations only cover kernel/, protocol/
-# and sim/, so other code skips them, and text no test reads skips everything. kernel/ and protocol/ get a short simulation,
-# since breaking each kernel condition in turn showed the quick tests already catch what the long runs do. A file this
-# doesn't name, or a diff it can't get, means full. What reaches main gets the quick tests, text too: a commit whose run a
-# newer push replaced is checked by the next one, whatever that is. The long runs come with nightly, and before a release.
+# Says how much CI a run needs, as scope=docs, normal, kernel or full. Text no test reads skips everything, and everything
+# else gets the quick tests. The simulation only imports kernel/ and protocol/, so those and its own parts add a short one:
+# breaking each kernel condition in turn showed the quick tests already catch what the long runs do. The long runs come with
+# nightly and before a release; a pull request only gets them for the two files nothing else would run, or a diff it can't
+# get. What reaches main gets the quick tests, text too: a commit whose run a newer push replaced is checked by the next one,
+# whatever that is.
 set -u
 
 if [ "${GITHUB_EVENT_NAME:-}" = push ]; then
@@ -25,10 +26,9 @@ while IFS= read -r file; do
     docs/plugins.md) kind=normal ;;
     README.md | README.en.md | INSTALL.md | SECURITY.md | CONTRIBUTING.md | AGENTS.md | LICENSE) kind=docs ;;
     docs/* | .github/ISSUE_TEMPLATE/* | .github/pull_request_template.md) kind=docs ;;
-    tests/simulation.test.ts) kind=full ;;
-    kernel/* | protocol/*) kind=kernel ;;
-    plugins/* | examples/* | skills/* | worker/* | host/* | cli/* | bin/* | scripts/* | tests/* | install.sh) kind=normal ;;
-    *) kind=full ;;
+    tests/simulation.test.ts | sim/enumerate.ts) kind=full ;;
+    kernel/* | protocol/* | sim/random.ts | sim/world.ts | sim/invariants.ts) kind=kernel ;;
+    *) kind=normal ;;
   esac
   case "$kind" in
     full) scope=full ;;

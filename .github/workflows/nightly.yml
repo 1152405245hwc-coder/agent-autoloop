@@ -32,7 +32,9 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm ci
-      - run: npm test
+      # A pull request that changes this file or sim/ gets the kills and the mutations; the long runs wait for the schedule.
+      - if: github.event_name != 'pull_request'
+        run: npm test
       - run: npm run test:deep
   # The install says Node 24 or newer, and every other check runs on 24.
   newest-node:

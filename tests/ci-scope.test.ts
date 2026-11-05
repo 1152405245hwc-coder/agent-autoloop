@@ -1,6 +1,7 @@
-// How much CI a change gets. Failure cases: a change to kernel code skips the short simulation; code, or text a test reads,
-// counts as text and runs nothing; a file nobody has sorted out yet skips anything; a move out of kernel/ counts only where
-// it landed; what reaches main skips the tests, so a commit whose run was cancelled or replaced is never checked; a diff
+// How much CI a change gets. Failure cases: a change to kernel code or to the simulation's parts skips the short simulation;
+// a change that can't touch what the long runs cover waits for them; a change to what only the long runs exercise never runs
+// them; code, or text a test reads, counts as text and runs nothing; a file nobody has sorted out yet skips the tests; a move
+// out of kernel/ counts only where it landed; what reaches main skips the tests, so a commit whose run was cancelled or replaced is never checked; a diff
 // that can't be read means less checking rather than more.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -70,13 +71,15 @@ for (const [files, expected] of [
   [["kernel/decide.ts"], "kernel"],
   [["protocol/rules.ts"], "kernel"],
   [["README.md", "worker/worker.ts", "kernel/decide.ts"], "kernel"],
-  [["sim/random.ts"], "full"],
+  [["sim/random.ts", "sim/world.ts", "sim/invariants.ts"], "kernel"],
+  [["sim/mutate.ts", "sim/mutation.test.ts", "sim/crash.ts", "sim/crash.test.ts"], "normal"],
+  [["package.json", "package-lock.json", "tsconfig.json"], "normal"],
+  [[".github/workflows/check.yml", ".github/workflows/nightly.yml"], "normal"],
+  [["somewhere/new.ts"], "normal"],
+  [["README.md", "kernel/decide.ts", "somewhere/new.ts"], "kernel"],
   [["tests/simulation.test.ts"], "full"],
-  [["package.json"], "full"],
-  [["package-lock.json"], "full"],
-  [[".github/workflows/check.yml"], "full"],
-  [["somewhere/new.ts"], "full"],
-  [["README.md", "kernel/decide.ts", "somewhere/new.ts"], "full"],
+  [["sim/enumerate.ts"], "full"],
+  [["README.md", "kernel/decide.ts", "sim/enumerate.ts"], "full"],
 ] as const) {
   test(`a PR changing ${files.join(", ")} gets ${expected}`, () => {
     assert.equal(scope(touching(...files)), `scope=${expected}`);
