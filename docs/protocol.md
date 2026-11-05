@@ -139,7 +139,7 @@ POST /v1/runs/12/result    Authorization: Bearer <token>   Result
   "usage": { "input": 0, "output": 0, "cached": 0, "cost": 0 },
   // 下面就是回执，一个事务里一次生效
   "ask":     [{ "title", "text", "options": ["…", "…"], "recommend": 0, "about": "留给接着干的自己", "key": "这件事的固定名字" }],
-  "notice":  [{ "title", "text", "key" }],
+  "notice":  [{ "title", "text", "key", "fyi": true }],
   "resolve": [{ "card": 3, "reason": "在哪核实了已解决" }],
   "later":   [{ "key": "…", "at": "2026-11-05T09:00:00+08:00", "about": "到时候查什么" }, { "key": "…", "cancel": true }],
   "events":  [{ "id", "type", "subject", "summary", "detail", "link" }]
@@ -152,6 +152,7 @@ POST /v1/runs/12/result    Authorization: Bearer <token>   Result
 - `usage` 由接单程序上报本次执行的用量，包含这次执行的回执重写；每一项都可以没有：`input`、`output`、`cached` 是 Token 数，`cost` 是美元。中台把同一轮各次执行的已报数值相加，重复提交不重复计费；没有上报的字段保持缺省，不当成零。`agent-autoloop status` 按完成时间汇总今天和最近 7 天已结束的轮次，没上报的轮数如实写出来。升级不重算旧回执，升级前已经被覆盖的累计值不会自动补回。
 - 有的 Agent 只给会话累计值（Codex 的 Token、Claude Code 的费用）。接单程序减去这次启动前的累计值再上报，所以这里总是本次的量；没有记录的续接不报这几项，详见[插件说明](plugins.md#agent-插件)。
 - `ask` 的 `key` 范围是这个事项：同一个 `key` 的卡片还开着就不再发。关掉之后再问是新的一次。
+- `notice` 可选填布尔字段 `fyi`：`true` 表示「仅告知」，卡片创建时就是 `closed`，仍会在创建后的 24 小时内投递，飞书显示灰卡、不带「已处理」按钮；不会进入后续轮次的 `open`，点击也不会产生回答事件。省略或填 `false` 时保持原行为：通知带「已处理」按钮，也能被 `resolve` 结案。它一创建就结案了，所以同一个 `key` 下一轮再写还会再发一张；同一轮重试只发一次。旧回执不受影响，`ask` 和 `tell: "never"` 的静默规则不变。老中台不认识这个字段，会拒收整份回执：中台和接单程序分开部署时先升中台。
 - `resolve` 只能结同来源、同组、这一轮领活前就有的卡片，越界的写进 `rejected`，不影响这一轮的结果。
 - `later` 的 `key` 范围是这个事项，同一个 `key` 再写一次就是改时间。
 - `events` 的来源由规则的 `emits` 决定，回执改不了。
@@ -213,8 +214,8 @@ GET /v1/cards/next?wait=50    Authorization: Bearer <通道的密钥>
 - `ref` 是空的就发一条新的；不是空的就把那条改成现在的样子，改不了就直接报告。
 - 发完报告：`POST /v1/cards/56/delivered { "version": 2, "ref": "om_xxx" }`。没报告的过一分钟会再给你。**支持幂等键的平台，发新消息只用卡片编号，不带版本**（飞书改不动已经结束的卡片时另发一条，这一条才带版本）。平台不支持时无法保证去重，Webhook 模板可能在报告丢失后重发。
 - 发不出去：`POST /v1/cards/56/failed { "version": 2, "error": "…" }`。第一次发送隔得越来越久地重试，一小时后放弃（卡片还开着，`agent-autoloop status` 看得到）；通道一直没来领不算在内。
-- 还没送达就已经解决的卡片不再打扰你。
-- 你点了：`POST /v1/cards/56/answer { "choice": 1, "by": "ou_xxx", "ref": "om_xxx" }`。只有第一次算数，`by` 要在这个通道的 `answerers` 里，`ref` 要和送达的那条一致。不带选项的通知有一个“已处理”按钮，点了就结案；也可以带 `text` 写一句处理说明，结案时存进卡片的 `answer`，卡面和 `/v1/state` 都看得到。
+- 还没送达就已经解决的卡片不再打扰你；仅告知的 `fyi` 通知在创建后的 24 小时内仍可投递。
+- 你点了：`POST /v1/cards/56/answer { "choice": 1, "by": "ou_xxx", "ref": "om_xxx" }`。只有第一次算数，`by` 要在这个通道的 `answerers` 里，`ref` 要和送达的那条一致。普通通知有一个“已处理”按钮，点了就结案；也可以带 `text` 写一句处理说明，结案时存进卡片的 `answer`，卡面和 `/v1/state` 都看得到。仅告知的 `fyi` 通知没有按钮。
 
 最小的通道只要十几行：领卡片、发文字和 `link`、报告。`link` 只给配了 `"links": true` 的通道，其他通道这里是 `null`。它打开一个不跑脚本的普通表单页，这张卡片的文字和按钮都在上面，谁拿到链接谁就能答，从卡片创建起 7 天内有效，过期后也不再显示卡片内容，适合只会发文字的群机器人、邮件。能发按钮、能收回调的通道（比如飞书）用按钮，身份由平台核验，更安全。一台电脑上用时 `link` 是本机地址，手机打不开，要手机批请把中台放到有公网地址的机器上，并配好 `publicUrl`。
 

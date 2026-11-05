@@ -215,10 +215,13 @@ function heldRun(draft: Draft, id: number, token: string, states: string[]) {
 function cardFromReceipt(draft: Draft, run: Row, kind: string, card: Row) {
   const name = card.key ?? digest(`${card.title}\n${card.text}`).slice(0, 32);
   const session = draft.view.get("runs", run.id)!.session;
+  const fyi = kind === "notice" && card.fyi === true;
   const quiet = kind === "notice" && ruleNamed(draft, run.rule)?.tell === "never";
   const origin = { source: sourceOf(draft.view, run.id), agent: run.agent, session, run: run.id };
   const key = `thread:${run.rule}:${run.lane}:${name}`;
-  createCard(draft, { ...card, hops: hopsOf(draft, run), key, kind, quiet, ...threadOf(run), ...origin });
+  // Closed as it's made, nothing open stops it coming again: a run trying again says it once.
+  if (fyi && rows(draft.view, "cards", { key, run_id: run.id }, 1).length) return;
+  createCard(draft, { ...card, hops: hopsOf(draft, run), key, kind, fyi, quiet, ...threadOf(run), ...origin });
 }
 
 /** Notices what has gone quiet: a worker that stopped coming, a run its worker stopped mentioning. */
@@ -327,7 +330,7 @@ function retryLater(draft: Draft, run: Row, result: Result) {
     set(draft, "runs", other.id, null);
     if (other.resume) put(draft, "runs", id, { resume: other.resume });
   }
-  if (!result.notice?.length && attempts === 3) {
+  if (!result.notice?.some((notice) => !notice.fyi) && attempts === 3) {
     const clock = { timeZone: draft.rules.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" } as const;
     const time = new Intl.DateTimeFormat("zh-CN", clock).format(notBefore);
     const words = `连续 3 次自动处理没跑完（卡在：${error}），${time} 会自动再试。`;

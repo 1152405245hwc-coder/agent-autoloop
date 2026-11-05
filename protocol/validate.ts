@@ -11,7 +11,7 @@ export const ANSWER_REF = 500;
 export const DELIVERY_REF = 500;
 export type Later = { key: string; at?: string; about?: string; cancel?: boolean };
 export type Ask = { title: string; text: string; options: string[]; recommend?: number; about?: string; key?: string };
-export type Notice = { title: string; text: string; key?: string };
+export type Notice = { title: string; text: string; key?: string; fyi?: boolean };
 export type Usage = { input?: number; output?: number; cached?: number; cost?: number };
 
 /** Missing figures stay missing: zero is a price or token count that was actually reported. */
@@ -123,10 +123,11 @@ const validAsk = (ask: Item) =>
       (ask.recommend as number) < ask.options.length));
 
 const validNotice = (notice: Item) =>
-  only(notice, ["title", "text", "key"]) &&
+  only(notice, ["title", "text", "key", "fyi"]) &&
   text(notice.title, 200) &&
   text(notice.text, 4000) &&
-  optional(notice.key, 100);
+  optional(notice.key, 100) &&
+  (notice.fyi === undefined || typeof notice.fyi === "boolean");
 
 const validResolve = (item: Item) =>
   only(item, ["card", "reason"]) &&

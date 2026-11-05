@@ -163,6 +163,9 @@
         "key": {
           "type": "string",
           "maxLength": 100
+        },
+        "fyi": {
+          "type": "boolean"
         }
       },
       "required": ["title", "text"],
