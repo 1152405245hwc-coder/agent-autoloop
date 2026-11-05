@@ -185,6 +185,7 @@ export function createWorker({
   let told = false;
   let tries = 0;
   let blind = false;
+  let tidied = -Infinity;
   const said = new Set<string>();
   /** Trouble that lasts comes round every second, and once in the log will do. */
   const sayOnce = (line: string) => {
@@ -417,7 +418,12 @@ export function createWorker({
     if (looking === null && !blind) log(`couldn't run ps; runs count as going until they end or time out`);
     blind = looking === null;
     const seen = read(entry, adapter, null);
-    const session = seen.session ?? (adapter.link ? (entry.resume ?? entry.session) : undefined);
+    // Kept as soon as it's read: if the end can't be read, the one made up at launch may be nothing its CLI knows of.
+    if (seen.session && seen.session !== entry.session) {
+      entry.session = seen.session;
+      save(entry);
+    }
+    const session = seen.session ?? (adapter.link ? entry.session : undefined);
     if (session && session !== entry.told) {
       try {
         await hub.started(entry.run, entry.token, { session, ...(adapter.link && { link: adapter.link(session) }) });
@@ -505,6 +511,11 @@ export function createWorker({
 
   /** One round: look at what's in hand, hand in what's ended, come for more. Whether the hub could be reached. */
   async function tick() {
+    // Here and not in run: whatever drives the worker comes through here.
+    if (now() - tidied >= TIDY_EVERY) {
+      tidied = now();
+      tidy(tidied);
+    }
     await eachEntry(check);
     await eachEntry(settle);
     const held = entries();
@@ -554,12 +565,7 @@ export function createWorker({
     log(`worker ${name} started`);
     // Started again after trouble, it may be what went: nothing else would bring it back, and every round needs it.
     mkdirSync(RUNS, { recursive: true, mode: 0o700 });
-    let tidied = -Infinity;
     while (!signalled.aborted) {
-      if (now() - tidied >= TIDY_EVERY) {
-        tidied = now();
-        tidy(tidied);
-      }
       if (!(await tick())) await new Promise((resolve) => setTimeout(resolve, PAUSE));
     }
   }

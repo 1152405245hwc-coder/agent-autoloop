@@ -1,5 +1,6 @@
 // What a worker keeps of finished runs. Failure cases: old output stays for as long as the worker runs, because it's only
-// cleared when it starts; the folder of a run still in hand, or one not old enough, goes; one folder that can't be cleared
+// cleared when it starts, or stays for a loop of its own that drives the worker round by round; the folder of a run still in
+// hand, or one not old enough, goes; one folder that can't be cleared
 // stops the worker or the rest of the clearing; session totals pile up for ever, or one still in use goes.
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
@@ -63,6 +64,18 @@ test("old output goes while the worker keeps running, not only when it starts", 
   await until(() => !existsSync(old));
   stop.abort();
   await running;
+});
+
+test("a loop of its own, going round by round, gets the clearing too", async () => {
+  let clock = Date.now();
+  const worker = createWorker({ hub: quiet() as any, name: "w1", wait: 0, now: () => clock });
+  await worker.tick();
+  const old = finished("7-1", 15);
+  await worker.tick();
+  assert.equal(existsSync(old), true, "cleared at the first round, so not again at once");
+  clock += 60 * 60_000 + 1;
+  await worker.tick();
+  assert.equal(existsSync(old), false);
 });
 
 test("only finished runs' folders old enough go", () => {
