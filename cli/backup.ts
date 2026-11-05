@@ -29,6 +29,8 @@ export async function backup(home: string, target: string) {
   if (!existsSync(database)) throw new Error("还没装好：先运行 agent-autoloop init");
   if (existsSync(target) && readdirSync(target).length) throw new Error(`备份目录不是空的：${target}`);
   mkdirSync(target, { recursive: true, mode: 0o700 });
+  // A mode only reaches a folder this makes, and an empty one may already be there.
+  chmodSync(target, 0o700);
   await copyDatabase(database, path.join(target, DB));
   const files = [DB];
   for (const name of FILES) {

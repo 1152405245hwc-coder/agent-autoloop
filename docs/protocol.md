@@ -54,8 +54,8 @@
     "when": { "source": "shop", "types": ["alert.*"] },   // 或 { "cron": "0 9 * * *" }
     "to": "claude", "cwd": "~/code/shop", "skill": "run-ops", "prompt": "按其中……一节处理。",
     "group": "ops",                                        // 同一组一次一轮，默认就是规则名
-    "parallel": 3,                                         // 写了就按对象分事项：同一对象一次一轮，这一组最多 3 轮
-    "tell": "needed",                                      // always 每次 / needed 只在有卡片时（默认）/ never 不推送
+    "parallel": 3,                                         // 写了就按对象分事项：同一对象一次一轮，这一组最多 3 轮，还受接单程序的 worker.capacity 限制（默认 2）
+    "tell": "needed",                                      // always 每轮做成都发（没事可做、没跑成不发）/ needed 只在有卡片时（默认）/ never 只压住回执里的通知，提问和中台自己的告警照发
     "emits": { "source": "shop", "types": ["pr.*"] }      // 回执里能发什么事件，不写就不能发
   }],
   "elsewhere": [{ "name": "每周清理", "source": "shop", "to": "claude", "cron": "0 6 * * 0", "where": "Claude 应用的定时任务" }]
@@ -77,11 +77,12 @@ POST /v1/events                    Authorization: Bearer <来源的密钥>
 - `id` 和 `type` 必填。同一来源同一 `id` 只记一次，所以来源尽管重发。
 - `subject` 只能是标识符（字母、数字和 `# . _ : / @ -`），`link` 只能是纯 ASCII 网址，因为它们会进提示词。`summary`、`detail` 不进提示词。
 - 没有规则匹配的事件也留着，`agent-autoloop status` 看得到。
+- 字段上限：`id` 200 个字、`subject` 100、`summary` 200、`detail` 4000、`link` 500，`type` 64 个字符。
 
 三种别的进法，到中台都是同一种事件：
 
 - **定时**：规则写 `cron`。错过的（比如电脑合盖了）醒来只补最近的一次。重复的时刻（夏令时）只跑第一次，不存在的时刻跳过。
-- **别人家的 Webhook**：`POST /v1/in/<来源>`。来源配了 `adapter`，就交给 `plugins/<adapter>/source.ts` 里的函数验签、翻译成事件，它只翻译，不发请求。验签用的秘密放在 `secrets.env`，不进 `rules.json`。
+- **别人家的 Webhook**：`POST /v1/in/<来源>`。来源配了 `adapter`，就交给 `plugins/<adapter>/source.ts` 里的函数验签、翻译成事件，它只翻译，不发请求。验签用的秘密放在 `secrets.env` 的 `AGENT_AUTOLOOP_SECRET_<来源>`（来源名转大写，`-` 换成 `_`，改完重启中台），不进 `rules.json`。
 - **轮询**：不用连公网，没新东西不花 Token。规则定时叫一段脚本（也是一个 Agent），脚本在回执的 `events` 里交回新事件。事件的 `id` 要稳定，读的范围可以重叠，中台会去重；脚本要在回执交出去之后才推进自己的游标，或者干脆不留游标。
 
 来源或 `elsewhere` 任务有话要直接告诉你（不用 Agent 处理）：
@@ -171,7 +172,7 @@ POST /v1/runs/12/result    Authorization: Bearer <token>   Result
 
 代码块可有可无。Agent 不需要装任何东西、不需要连中台，所以沙箱里的、云端的 Agent 也能接。
 
-回执写错不重做业务：接单程序接着原会话，只让它把最后一条消息重写一遍，最多两次。还是读不懂，或重写进程启动失败、报错、超时、没有输出，就保留原业务消息第一行的结局，回执作废，推一张卡片告诉你原文在哪（每一轮的输出在这一轮结束后留 14 天）；补回执失败不会把已完成的业务变成自动重试。
+回执写错不重做业务：接单程序接着原会话，只让它把最后一条消息重写一遍，最多两次；没有会话的 Agent（比如 `command`）不重写，直接走下面这句。还是读不懂，或重写进程启动失败、报错、超时、没有输出，就保留原业务消息第一行的结局，回执作废，推一张卡片告诉你原文在哪（每一轮的输出在这一轮结束后留 14 天）；补回执失败不会把已完成的业务变成自动重试。
 
 ### 接一个新 Agent
 
@@ -208,7 +209,7 @@ GET /v1/cards/next?wait=50    Authorization: Bearer <通道的密钥>
 // Card：这张卡片现在的样子。内容创建后不变，只有状态会变
 { "id": 56, "version": 2, "ref": null, "kind": "ask", "state": "open",
   "title": "…", "text": "…", "options": ["…", "…"], "recommend": 0,
-  "choice": null, "answer": null, "result": null, "link": null }
+  "choice": null, "answer": null, "by": null, "result": null, "link": null }
 ```
 
 - `ref` 是空的就发一条新的；不是空的就把那条改成现在的样子，改不了就直接报告。
@@ -223,7 +224,7 @@ GET /v1/cards/next?wait=50    Authorization: Bearer <通道的密钥>
 
 ```
 GET  /v1/state              Authorization: Bearer <本人的密钥>
-→ 200 { "totals", "cards", "recentCards", "agents", "channels", "sources", "lines", "elsewhere", "runs", "nextBefore", "unrouted" }
+→ 200 { "totals", "cards", "recentCards", "agents", "channels", "sources", "lines", "elsewhere", "runs", "nextBefore", "hasMore", "unrouted", "spending", "now", "timezone" }
 
 POST /v1/cards/56/answer    { "choice": 1 } 或 { "text": "别的想法" }
 POST /v1/cards/56/resolve   { "reason": "不用决定了，因为……" }
@@ -247,7 +248,7 @@ POST /v1/runs/12/cancel     {}
 | 需要本人恢复浏览器连接、登录或验证 | 本轮结束，保留已完成业务和待验收项，用问题卡片等回答，不自动重派 |
 | 原会话接不上 | 开新会话，靠资料文件接着干 |
 | 接上了原会话，干到一半断了 | 算没跑成，留在原会话按上面的节奏重派，不开新会话把业务重做一遍 |
-| 回执写错 | 只重写回执，不重做业务 |
+| 回执写错 | 只重写回执，不重做业务；没有会话的 Agent 回执作废，推一张卡片 |
 | Agent 插件读不懂自己的输出 | 还在跑的接着跑；结束或进程没了后算没跑成，留在原会话重派 |
 | 接单程序或通道停了，或插件有没接住的错误 | 记日志，停了的 30 秒后重启；中台和其他部分照常 |
 | 别的进程占着数据库太久 | 这次到期先不做，5 秒后再试，中台不退出；这期间写坏的规则文件也会告诉你 |
@@ -334,7 +335,7 @@ Webhook 通道的 `config.json` 配置使用 `use: "webhook"`、`url` 和 `platf
 
 浏览器交接模板是主任务对已安装入口的参数调用，不新增协议或浏览器驱动。可信配置固定命令、目标与允许操作，续办使用入口实际返回的 Codex 会话编号；网页内容和外部事件不能改这些范围。连接、登录或验证受阻时由主任务 `ask` 并结束本轮，回答后只继续剩余网页步骤，浏览器助手不再次委派或独立结案。
 
-反馈、巡检和飞书摘要的脚本使用本地假 HTTP 和假飞书 CLI 验证，不调用真实业务数据、不发真消息。公开样例不含内部地址、账号或业务记录；用户替换后的资料不应提交到仓库。结构与通道职责未变，架构图沿用现有三口协议。
+巡检和飞书摘要的脚本使用本地假 HTTP 和假飞书 CLI 验证，不调用真实业务数据、不发真消息。公开样例不含内部地址、账号或业务记录；用户替换后的资料不应提交到仓库。结构与通道职责未变，架构图沿用现有三口协议。
 
 ## 结构与预算
 

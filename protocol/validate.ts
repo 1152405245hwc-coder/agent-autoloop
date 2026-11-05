@@ -73,6 +73,8 @@ export function parseEvent(input: unknown): EventInput {
     link: field("link"),
     hops: hops as number,
   };
+  // Half a Unicode character is stored and looked up as different bytes, so the same id would never be recognised again.
+  if (!event.id.isWellFormed()) throw new InputError("id 里有不完整的字符");
   if (!EVENT_TYPE.test(event.type)) throw new InputError("type 只能用小写字母、数字和 . _ -，以字母开头");
   // The subject and link go into the Agent's prompt, so neither may carry words: a subject is an identifier, a link a
   // web address in plain ASCII (anything else percent-encoded).
@@ -107,12 +109,16 @@ export function dateTime(value: unknown): boolean {
   return month >= 1 && month <= 12 && day >= 1 && day <= daysIn[month - 1] && hour < 24 && minute < 60 && second < 60;
 }
 
+/** A key is looked up later, and half a Unicode character is stored and looked up as different bytes: it would never match. */
+const wellFormed = (value: unknown) => typeof value !== "string" || value.isWellFormed();
+
 const validAsk = (ask: Item) =>
   only(ask, ["title", "text", "options", "recommend", "about", "key"]) &&
   text(ask.title, 200) &&
   text(ask.text, 4000) &&
   optional(ask.about, 4000) &&
   optional(ask.key, 100) &&
+  wellFormed(ask.key) &&
   Array.isArray(ask.options) &&
   ask.options.length >= 2 &&
   ask.options.length <= 5 &&
@@ -127,6 +133,7 @@ const validNotice = (notice: Item) =>
   text(notice.title, 200) &&
   text(notice.text, 4000) &&
   optional(notice.key, 100) &&
+  wellFormed(notice.key) &&
   (notice.fyi === undefined || typeof notice.fyi === "boolean");
 
 const validResolve = (item: Item) =>
@@ -138,6 +145,7 @@ const validResolve = (item: Item) =>
 const validLater = (later: Item) =>
   only(later, ["key", "at", "about", "cancel"]) &&
   text(later.key, 100) &&
+  wellFormed(later.key) &&
   (later.cancel === true
     ? later.at === undefined
     : dateTime(later.at) && text(later.about, 4000) && later.cancel === undefined);

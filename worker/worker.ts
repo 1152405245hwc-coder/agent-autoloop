@@ -362,7 +362,7 @@ export function createWorker({
     if (entry.repairs && !problem && result.outcome === "failed") return discardReceipt(entry, adapter, result.error!);
     if (!problem) return endWith(entry, result);
     // Its work is done and only the receipt is wrong: it writes the receipt again, and does nothing again.
-    if (adapter.link && entry.repairs < REPAIRS && seen.session) {
+    if (entry.repairs < REPAIRS && seen.session) {
       log(`run ${entry.run}: receipt not readable (${problem}); asking again`);
       entry.repairs += 1;
       entry.resume = seen.session;

@@ -8,6 +8,7 @@ import { execFile, spawn, spawnSync } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -94,6 +95,14 @@ test("a real hub's data, backed up while it runs, comes back whole under its own
     JSON.parse(started.stdout),
     hub.stateOf().runs.map((run: { id: number }) => run.id),
   );
+});
+
+test("a backup into an empty folder that's already there makes it private: it holds the keys", async () => {
+  const target = join(folder(), "made-beforehand");
+  mkdirSync(target);
+  chmodSync(target, 0o755);
+  await backup(home, target);
+  assert.equal(mode(target), 0o700);
 });
 
 test("a restore keeps what it replaced, and the old WAL doesn't stay beside the new database", async () => {

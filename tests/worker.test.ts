@@ -98,6 +98,21 @@ export default {
 };`,
 );
 
+// Has sessions to go on in, but nothing a person can open.
+mkdirSync(join(home, "plugins", "no-link"), { recursive: true });
+writeFileSync(
+  join(home, "plugins", "no-link", "agent.ts"),
+  `
+export default {
+  command: (t) => ["/bin/sh", "-c", t.command[0], "no-link", t.resume ?? "", t.prompt],
+  read(stdout, code) {
+    const session = /session=(\\S+)/.exec(stdout)?.[1];
+    if (code === null) return { session };
+    return { text: stdout.replace(/session=\\S+\\n/, ""), session, started: true };
+  },
+};`,
+);
+
 // One that gives back nothing at all.
 mkdirSync(join(home, "plugins", "silent"), { recursive: true });
 writeFileSync(
@@ -503,6 +518,21 @@ test("a receipt that can't be read is asked for again in the same session, doing
   assert.deepEqual(hub.results[0].notice, [{ title: "看一眼", text: "这个" }]);
   assert.equal(hub.results[0].session, "s-1");
   assert.deepEqual(hub.results[0].usage, { input: 2, output: 2 }, "both turns count; no turn reported a price");
+});
+
+test("a plugin with sessions and nothing to open gets to rewrite its receipt too", async () => {
+  const hub = fakeHub();
+  const wrong = said("no-link-wrong", `session=s-2\n做完了\n\n${FENCE}agent-autoloop\n{ 不是 json\n${FENCE}\n`);
+  const right = said(
+    "no-link-right",
+    `session=s-2\n做完了\n\n${FENCE}agent-autoloop\n{"notice":[{"title":"看一眼","text":"这个"}]}\n${FENCE}\n`,
+  );
+  const script = `if [ -n "$1" ]; then cat "${right}"; exit 0; fi; echo did-it >> "${folder}/no-link-work.txt"; cat "${wrong}"`;
+  hub.jobs.push(job({ use: "no-link", command: [script] }));
+  const w = worker(hub);
+  await until(w, () => hub.results.length === 1);
+  assert.equal(readFileSync(join(folder, "no-link-work.txt"), "utf8"), "did-it\n", "the work was done once");
+  assert.deepEqual(hub.results[0].notice, [{ title: "看一眼", text: "这个" }]);
 });
 
 for (const failure of ["exit", "timeout", "unreadable", "empty", "failed-message"] as const) {

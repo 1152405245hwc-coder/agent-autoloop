@@ -22,7 +22,7 @@ Most of us use command-line agents like Claude Code or Codex by babysitting a te
 
 Works on macOS and Linux. You need Node 24, Git, curl, and at least one command-line agent already signed in; no GitHub account required. You can also hand the [installation guide](INSTALL.md) to your agent and let it install everything for you.
 
-> **Windows: pending.** Many of you have asked for a Windows version, and I've seen every request. I'm away on a work trip without a Windows machine, so I can't build or test it on real hardware, and it doesn't run on Windows yet. When I get home this weekend (November 7–8), I'll finish it, run compatibility tests, and then release it properly. Progress will be posted in [#17](https://github.com/KKKKhazix/agent-autoloop/issues/17).
+> **Windows: pending.** Many of you have asked for a Windows version, and I've seen every request. I'm away on a work trip without a Windows machine, so I can't build or test it on real hardware, and it doesn't run on Windows yet. When I get home this weekend (November 7–8), I'll finish it, run compatibility tests, and then release it properly. Progress will be posted in [#17](https://github.com/KKKKhazix/agent-autoloop/issues/17). If you can't wait, WSL2 works for now; see [INSTALL](INSTALL.md) for what to expect.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/KKKKhazix/agent-autoloop/main/install.sh | sh
@@ -117,7 +117,7 @@ Order checked. We have enough stock in the warehouse.
 ```
 ````
 
-Besides `ask`, receipts can send notifications (`notice`), resolve open cards (`resolve`), schedule follow-up checks (`later`), and emit new events (`events`). A notice asks for nothing, but you can add a line of your own when you settle one, and it stays on the card; one marked `fyi` is only there to tell you, and has no button. If the JSON is invalid, the hub has the agent rewrite just that final message in the same session, without repeating completed work. If rewriting also fails, it keeps the original conclusion and tells you the receipt was not applied. Going on in an old session works the same way: a new session starts only when the old one can't be continued. If it was continued and then broke partway, the run counts as failed and is retried in that session a few minutes later, not redone in a new one.
+Besides `ask`, receipts can send notifications (`notice`), resolve open cards (`resolve`), schedule follow-up checks (`later`), and emit new events (`events`). A notice asks for nothing, but you can add a line of your own when you settle one, and it stays on the card; one marked `fyi` is only there to tell you, and has no button. If the JSON is invalid, the hub has the agent rewrite just that final message in the same session, without repeating completed work. If rewriting also fails, it keeps the original conclusion and tells you the receipt was not applied (a plain command has no session, so it goes straight to this). Going on in an old session works the same way: a new session starts only when the old one can't be continued. If it was continued and then broke partway, the run counts as failed and is retried in that session a few minutes later, not redone in a new one.
 
 ## Ready-to-use recipes
 
@@ -159,7 +159,7 @@ Built-in plugins ship with the program and are enabled through configuration. Us
 | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cli-help.md#dsh-headless) older versions (the built-in plugin needs 0.2.2 or newer) | `dsh --profile headless {prompt}` |
 | [pi](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/cli.md) | `pi --print {prompt}` |
 | [OpenClaw](https://docs.openclaw.ai/cli/agent) | `openclaw agent exec {prompt}` |
-| [Hermes](https://hermes-agent.nousresearch.com/docs/user-guide/cli) | `hermes chat -q {prompt}` |
+| [Hermes](https://hermes-agent.nousresearch.com/docs/user-guide/cli) | `hermes chat -Q -q {prompt}` |
 | [Cursor](https://cursor.com/docs/cli/reference/parameters) | `agent -p --trust {prompt}` |
 | [WorkBuddy / CodeBuddy](https://www.codebuddy.ai/docs/cli/headless) | `codebuddy -p {prompt}` |
 
@@ -208,7 +208,7 @@ Apple M5 Pro, 24 GB, Node 24.21.0. Each write is a separate request, acknowledge
 | Dispatch p99 | 1.82 ms |
 | Held-back heartbeat p99 with 5,000 queued | 1.66 ms |
 | Startup at 1.1 million facts | 99.8 ms |
-| Kernel lines (with comments and blanks) | 1,651 |
+| Kernel lines (with comments and blanks) | about 1,800 |
 | Runtime dependencies | 0 |
 
 As history grows, the status summary slows down and the log and indexes keep using disk. The first start after a format change rebuilds from the log, which took 43.1 seconds for 1.1 million facts. [Full numbers and method](docs/protocol.md#历史增长实测) (in Chinese).

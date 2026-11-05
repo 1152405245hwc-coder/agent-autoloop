@@ -11,7 +11,7 @@ description: 配置 Agent 自动化中台：加规则、接新的事件插件、
 
 `agent-autoloop status` 列出谁在线、等用户什么、在做什么、做过什么，还有按完成时间统计的今天和最近 7 天的轮数、Token 和费用（同一轮重试的已报用量相加，没上报的轮数会写出来）。`agent-autoloop status --json` 输出 `/v1/state` 的原样结构，给脚本和看板用。`agent-autoloop answer <卡片> <序号>` 回答，`agent-autoloop resolve <卡片> <结果>` 结案，`agent-autoloop stop <第几轮>` 停掉一轮，等整个进程组退出才报告已停。
 
-续接会话也只算这次新增的用量。`worker/usage/` 存着相减要用的累计值，没有记录的续接（比如删了这个目录，或这个会话超过 90 天没用）这次不报 Codex 的 Token 和 Claude Code 的费用，下一次恢复正常。本人打开链接在同一个会话里接着聊用掉的量，会算进下一次续接。旧回执不重算。
+续接会话也只算这次新增的用量。`~/.agent-autoloop/worker/usage/` 存着相减要用的累计值，没有记录的续接（比如删了这个目录，或这个会话超过 90 天没用）这次不报 Codex 的 Token 和 Claude Code 的费用，下一次恢复正常。本人打开链接在同一个会话里接着聊用掉的量，会算进下一次续接。旧回执不重算。
 
 这里没有网页。用户想要一个页面看全局，就替他写一个：读 `GET /v1/state`，密钥是 `config.json` 的 `owner`，请求见 `docs/protocol.md` 的「本人」一节。
 
@@ -26,7 +26,7 @@ description: 配置 Agent 自动化中台：加规则、接新的事件插件、
 { "name": "早报", "when": { "cron": "0 9 * * *" }, "to": "codex", "cwd": "~/notes", "prompt": "写今天的早报。" }
 ```
 
-- 同一个对象的事件要分开处理、互不等待，就写 `parallel`。
+- 同一个对象的事件要分开处理、互不等待，就写 `parallel`。一台接单程序同时跑几轮还受 `config.json` 的 `worker.capacity` 限制，默认 2，要多跑就一起调大。
 - 默认的先问清单是 `askFirst`，用户说什么事必须先问他，就改这里。
 - 用户在别的地方定时跑的任务（Claude、Codex 应用里），写进 `elsewhere`，只在 `agent-autoloop status` 里列出来；它们要找用户时运行 `agent-autoloop tell <编号> --task <任务名>`，内容从标准输入传。
 
@@ -45,7 +45,7 @@ description: 配置 Agent 自动化中台：加规则、接新的事件插件、
 有三种：
 
 1. **对方能发 HTTP**：`agent-autoloop key new source <名字>` 拿密钥（这是新建密钥，先问用户），`rules.json` 的 `sources` 登记，对方 `POST /v1/events`。
-2. **对方有自己的 Webhook 格式**：在 `~/.agent-autoloop/plugins/<名字>/source.ts` 写一个函数，验签并翻译成事件（见 `plugins/github/source.ts`），来源写 `"adapter": "<名字>"`，地址是 `/v1/in/<来源>`，秘密放 `~/.agent-autoloop/secrets.env` 的 `AGENT_AUTOLOOP_SECRET_<来源>`。对方要能连到中台，所以中台要在服务器上，或者用隧道。
+2. **对方有自己的 Webhook 格式**：在 `~/.agent-autoloop/plugins/<名字>/source.ts` 写一个函数，验签并翻译成事件（见 `plugins/github/source.ts`），来源写 `"adapter": "<名字>"`，地址是 `/v1/in/<来源>`，秘密放 `~/.agent-autoloop/secrets.env` 的 `AGENT_AUTOLOOP_SECRET_<来源>`（来源名转大写，`-` 换成 `_`），改完重启中台（`agent-autoloop service install`）。对方要能连到中台，所以中台要在服务器上，或者用隧道。
 3. **对方推不过来，或者中台在家里**：定时跑一段脚本轮询，见 `examples/watch-github-issues.sh`。规则用 `use: "command"` 的 Agent，写上 `emits`。没新东西不花 Token。
 
 ## 接一个 Agent
@@ -61,6 +61,8 @@ description: 配置 Agent 自动化中台：加规则、接新的事件插件、
 `access` 默认 `edit`，专用插件翻译成对应 CLI 的权限；`command` 只传参数，不替任意程序限制权限，按该 CLI 文档配置。要完整权限、不审批的话写 `full`，先和用户说清楚。
 
 第三方仓库根目录放 `agent.ts`、`channel.ts` 或 `source.ts`，用 `agent-autoloop add <git 地址>` 安装到 `~/.agent-autoloop/plugins/<仓库名>`。同名本机插件优先于内置插件，不自动更新。插件是可信代码，先读再装。
+
+一轮最长跑多久写 `timeout`，单位是分钟，默认 180。
 
 ACP 用 `use: "acp"` 和 `command: ["ACP 服务程序"]`，支持 v1 的会话新建、恢复、文字与一次性权限请求；先在该 Agent 自己的 CLI 登录。普通命令接法与实测支持范围见 README。
 
@@ -148,14 +150,16 @@ MCP 客户端的启动程序填 `node`，参数为本机引擎绝对路径 `bin/
 
 手机要批卡片、别人的 Webhook 要进来时，把中台放到一台有公网的机器上：
 
-1. 服务器上 `sh install.sh --no-service`，`config.json` 里 `hub.listen` 用 `127.0.0.1:3350`（要写成 `主机:端口`，IPv6 用 `[地址]:端口`；只写端口或 `:端口` 会被拒绝，避免意外监听所有网卡），`hub.publicUrl` 写公网地址，去掉 `worker`，再 `agent-autoloop service install`。前面放一个做 HTTPS 的反向代理（Caddy、nginx）。
-2. 每台干活的电脑：服务器上 `agent-autoloop key new worker <名字>`，电脑上 `agent-autoloop join https://中台地址 --worker <名字> --key <密钥>`。`rules.json` 的 Agent 写上对应的 `worker`。
+1. 服务器上 `sh install.sh --no-service --command true`（这台不跑 Agent，`--command true` 只是占位，第 2 步把 `rules.json` 里的 Agent 换成真的），`config.json` 里 `hub.listen` 用 `127.0.0.1:3350`（要写成 `主机:端口`，IPv6 用 `[地址]:端口`；只写端口或 `:端口` 会被拒绝，避免意外监听所有网卡），`hub.publicUrl` 写公网地址，去掉 `worker`，再 `agent-autoloop service install`。前面放一个做 HTTPS 的反向代理（Caddy、nginx）。
+2. 每台干活的电脑：服务器上 `agent-autoloop key new worker <名字>`，电脑上 `curl -fsSL https://raw.githubusercontent.com/KKKKhazix/agent-autoloop/main/install.sh | sh -s -- join https://中台地址 --worker <名字> --key <密钥>`。`rules.json` 的 Agent 写上对应的 `worker`。
 
 电脑不用开放任何端口，它们自己连过去。
 
 服务器上自己写的系统级 systemd unit，名字要和 `agent-autoloop service install` 用的一样（默认 `agent-autoloop`），`doctor` 才认得出。`agent-autoloop update` 不碰它，更新后自己运行 `systemctl restart` 才会用上新版。
 
 ## 日志与恢复
+
+日志：macOS 在 `~/.agent-autoloop/logs/up.log`，Linux 运行 `journalctl --user -u agent-autoloop`。
 
 接插件先在专用测试中台验证：`agent-autoloop conformance <地址> --config <测试凭据文件>`。文件里的 `keys` 分别放来源、接单程序、通道、本人密钥；`eventType` 匹配测试规则，`answerer` 在测试通道的允许名单内。检查会写事件和卡片，不指向正在用的中台。协议类型在 `protocol/schema.json`。
 

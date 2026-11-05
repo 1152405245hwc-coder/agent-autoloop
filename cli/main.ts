@@ -45,11 +45,12 @@ const HELP = `Agent 自动化中台
   agent-autoloop mcp                      用标准输入输出连接 MCP 客户端
   agent-autoloop join <中台地址> --worker <名字> --key <密钥> [--no-service]
                                     另一台电脑只接活时用
-  agent-autoloop backup [目录]           备份数据库、主密钥和配置；不填目录就放在 ~/.agent-autoloop/backups
+  agent-autoloop backup [目录]           备份数据库、主密钥、配置、规则和 secrets.env；不填目录就放在 ~/.agent-autoloop/backups
   agent-autoloop restore <目录> [--yes]  停掉中台后，用一次备份恢复本机数据
   agent-autoloop update                  更新到最新发布的版本
   agent-autoloop uninstall [--yes]       卸载程序并保留数据；--yes 跳过确认
   agent-autoloop --version               版本和当前提交
+  agent-autoloop help                    这份说明
   agent-autoloop up                      启动（平时由系统服务调用）
   agent-autoloop service install|remove  系统服务
 
@@ -82,7 +83,7 @@ const UNINSTALL_USAGE = `用法：agent-autoloop uninstall [--yes]
 
 const RESTORE_USAGE = `用法：agent-autoloop restore <目录> [--yes]
 
-恢复会替换本机的数据库、主密钥和配置文件；先停掉中台，--yes 跳过确认。`;
+恢复会替换本机的数据库、主密钥、配置、规则和 secrets.env；先停掉中台，--yes 跳过确认。`;
 
 /** What each command reads besides its own words, and how to use it. */
 const TAKES: Record<string, { flags: string[]; usage: string }> = {
@@ -251,7 +252,7 @@ async function init(args: string[]) {
   if (!Object.keys(agents).length) {
     return fail(
       "这台电脑上没找到 Claude Code 或 Codex。先装好并登录，" +
-        "或者用 --command 指定别的命令行 Agent，比如 --command 'hermes chat -q {prompt}'",
+        "或者用 --command 指定别的命令行 Agent，比如 --command 'hermes chat -Q -q {prompt}'",
     );
   }
   const port = text(named.port) ?? "3350";
@@ -294,7 +295,8 @@ async function join(args: string[]) {
   }
   writeConfig({ url, worker: { name, key } });
   if (!named["no-service"]) installService();
-  console.log(`这台电脑以 ${name} 的身份接活了。`);
+  const next = named["no-service"] ? `运行 ${howToRun()} up 开始。` : "";
+  console.log(`这台电脑以 ${name} 的身份接活了。${next}`);
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -590,7 +592,7 @@ async function restoreCommand(args: string[]) {
   if (!rest[0]) return fail(RESTORE_USAGE);
   if (named.yes === undefined) {
     if (!process.stdin.isTTY) return fail("恢复会替换本机数据；确认后运行 agent-autoloop restore <目录> --yes");
-    const answer = await askAtTerminal("恢复会替换本机的数据库、主密钥和配置文件，继续？[y/N] ");
+    const answer = await askAtTerminal("恢复会替换本机的数据库、主密钥、配置、规则和 secrets.env，继续？[y/N] ");
     if (!/^y(es)?$/i.test(answer.trim())) {
       console.log("没有恢复。");
       return;
