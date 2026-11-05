@@ -45,6 +45,8 @@ const HELP = `Agent 自动化中台
   agent-autoloop mcp                      用标准输入输出连接 MCP 客户端
   agent-autoloop join <中台地址> --worker <名字> --key <密钥>
                                     另一台电脑只接活时用
+  agent-autoloop backup [目录]           备份数据库、主密钥和配置；不填目录就放在 ~/.agent-autoloop/backups
+  agent-autoloop restore <目录> [--yes]  停掉中台后，用一次备份恢复本机数据
   agent-autoloop update                  更新到最新发布的版本
   agent-autoloop uninstall [--yes]       卸载程序并保留数据；--yes 跳过确认
   agent-autoloop --version               版本和当前提交
@@ -521,6 +523,33 @@ async function emit(args: string[]) {
   console.log(answer.routed.length ? `交给了：${answer.routed.join("、")}` : "记下了，没有规则接它。");
 }
 
+async function backupCommand(args: string[]) {
+  const { rest } = flagsOf(args, [], "用法：agent-autoloop backup [目录]");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const target = path.resolve(rest[0] ?? path.join(HOME, "backups", stamp));
+  const { backup } = await import("./backup.ts");
+  const { files } = await backup(HOME, target);
+  console.log(`备份好了：${target}\n  ${files.join("、")}\n里面有密钥，把它放到安全的地方；恢复要中台停下来。`);
+}
+
+async function restoreCommand(args: string[]) {
+  const usage =
+    "用法：agent-autoloop restore <目录> [--yes]\n\n恢复会替换本机的数据库、主密钥和配置文件；先停掉中台，--yes 跳过确认。";
+  const { named, rest } = flagsOf(args, ["yes"], usage);
+  if (!rest[0]) return fail(usage);
+  if (named.yes === undefined) {
+    if (!process.stdin.isTTY) return fail("恢复会替换本机数据；确认后运行 agent-autoloop restore <目录> --yes");
+    const answer = await askAtTerminal("恢复会替换本机的数据库、主密钥和配置文件，继续？[y/N] ");
+    if (!/^y(es)?$/i.test(answer.trim())) {
+      console.log("没有恢复。");
+      return;
+    }
+  }
+  const { restore } = await import("./backup.ts");
+  const { safety } = await restore(HOME, path.resolve(rest[0]));
+  console.log(`恢复好了。原来的文件在 ${safety}。\n启动：agent-autoloop up 或 agent-autoloop service install`);
+}
+
 async function rulesCommand(args: string[]) {
   const { rest } = flagsOf(args, [], "用法：agent-autoloop rules explain");
   if (rest[0] !== "explain" || rest.length > 1) return fail("用法：agent-autoloop rules explain");
@@ -623,6 +652,8 @@ const commands: Record<string, () => unknown> = {
   emit: () => emit(args),
   tell: () => tell(args),
   stop: () => stop(args),
+  backup: () => backupCommand(args),
+  restore: () => restoreCommand(args),
   update,
   uninstall: async () => {
     const { uninstall } = await import("./uninstall.ts");
