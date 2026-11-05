@@ -6,10 +6,12 @@
 // a cookie or a sign-in opens anything; someone other than the owner reads everything, answers, resolves or stops; looking
 // at a card's link answers it; a card's words run as markup or the page loads a script; Enter in the text box picks the first
 // option; a card link answers more than its card; a webhook with a bad signature is taken, or one without an adapter; a
-// webhook's secret leaks into anything it returns; the owner's key opens the worker's door; a page other than a card's exists.
+// webhook's secret leaks into anything it returns; the owner's key opens the worker's door; a page other than a card's exists;
+// a card's link still answers or shows the card after its week, or sends you to a command that doesn't work; a link opens
+// when no channel takes links.
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -30,7 +32,7 @@ export default function ({ headers, body, secret }) {
 );
 process.env.AGENT_AUTOLOOP_SECRET_HOOKS = "hook-secret";
 const { serve } = await import("../host/http.ts");
-const { addKey } = await import("../host/runtime.ts");
+const { addKey, createCard, reloadRules } = await import("../host/runtime.ts");
 const { all, one } = await import("../host/runtime.ts");
 
 const keys = {
@@ -323,6 +325,42 @@ test("a card's link is a plain page: it shows that card as words, runs nothing, 
   assert.equal((await form(path, "choice=0")).status, 303);
   assert.equal(stored(id).choice, 1, "only the first press counts");
   assert.equal((await call(`${path}.json`)).status, 404);
+});
+
+test("a card's link lasts a week: after that it neither answers nor shows the card", async () => {
+  const days = (count: number) => Date.now() - count * 24 * 60 * 60_000;
+  const made = (key: string, at: number) =>
+    createCard({ key, kind: "ask", title: "放了很久的问题", text: "放了很久的内容", options: ["甲", "乙"] }, at).card;
+  const linkOf = (id: number) => `/c/${one<{ token: string }>("SELECT token FROM cards WHERE id = ?", [id])!.token}`;
+
+  const recent = made("link-recent", days(6));
+  assert.equal((await call(linkOf(recent))).status, 200);
+  assert.equal((await form(linkOf(recent), "choice=1")).status, 303);
+  assert.equal(stored(recent).choice, 1);
+
+  const old = made("link-old", days(8));
+  const shown = await call(linkOf(old));
+  assert.equal(shown.status, 401);
+  assert.ok(!shown.text.includes("放了很久"), "what it asked stays off the page");
+  assert.ok(shown.text.includes("agent-autoloop status"), "and it says where to answer instead");
+  assert.equal((await form(linkOf(old), "choice=1")).status, 401);
+  assert.deepEqual([stored(old).state, stored(old).choice], ["open", null]);
+});
+
+test("with no channel taking links, a card's link doesn't open", async () => {
+  const { path } = await linkFor(65, { ask: [{ title: "问", text: "问", options: ["甲", "乙"], key: "no-links" }] });
+  const fixture = process.env.AGENT_AUTOLOOP_RULES!;
+  const rules = JSON.parse(readFileSync(fixture, "utf8"));
+  delete rules.channels.plain.links;
+  const file = join(home, "no-links.json");
+  writeFileSync(file, JSON.stringify(rules));
+  reloadRules(file);
+  try {
+    assert.equal((await call(path)).status, 404);
+  } finally {
+    reloadRules(fixture);
+  }
+  assert.equal((await call(path)).status, 200);
 });
 
 test("a card's link takes words of your own, and a notice takes a line of its own", async () => {

@@ -22,8 +22,7 @@ import { at, setup } from "./helpers.ts";
 setup("cards");
 const { ingest } = await import("../host/runtime.ts");
 const { cancel, claimNext, execute, finish, heartbeat, started, sweep } = await import("../host/runtime.ts");
-const { answer, resolve, nextCard, delivered, failed, tell, cardByToken, answerByLink, getView } =
-  await import("../host/runtime.ts");
+const { answer, resolve, nextCard, delivered, failed, tell, cardByToken, getView } = await import("../host/runtime.ts");
 const { AuthError, InputError, NotFound } = await import("../kernel/errors.ts");
 const { all, one, run } = await import("./storage.ts");
 
@@ -552,7 +551,7 @@ test("what only needed saying goes stale: a channel coming back after a day does
   assert.equal(nextCard("chat", at(25 * 60))?.id, id, "what still needs an answer does");
 });
 
-test("a card's link answers only when its channel allows it, only that card, only within a week", () => {
+test("a card's link goes only to a channel that allows it, and opens only that card", () => {
   clean();
   const { id } = asked(1);
   const token = card(id).token;
@@ -560,7 +559,4 @@ test("a card's link answers only when its channel allows it, only that card, onl
   assert.equal(nextCard("chat", at(1))!.link, null, "a channel with buttons has no use for a link that answers");
   assert.equal(cardByToken(token)!.id, id);
   assert.equal(cardByToken("made-up"), undefined);
-  assert.throws(() => answerByLink(token, { choice: 0 }, at(8 * 24 * 60)), AuthError, "too old");
-  assert.equal(answerByLink(token, { choice: 0 }, at(2)).changed, true);
-  assert.equal(card(id).by, "链接");
 });

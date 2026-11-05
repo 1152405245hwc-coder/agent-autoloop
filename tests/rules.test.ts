@@ -17,8 +17,8 @@ import { test } from "node:test";
 import { setup } from "./helpers.ts";
 
 const home = setup("rules");
-const { parseRules, RulesError, rules, ruleNamed, rulesFor, workers, agentsOf, limitOf, reloadRules, typeMatches } =
-  await import("../host/runtime.ts");
+const { parseRules, RulesError, rules, ruleNamed, reloadRules } = await import("../host/runtime.ts");
+const { typeMatches } = await import("../kernel/rules.ts");
 
 const good = () => JSON.parse(readFileSync(join(import.meta.dirname, "rules.fixture.json"), "utf8"));
 const problem = (change: (r: any) => void, words: RegExp) => {
@@ -156,16 +156,7 @@ test("a null rule is a rules error and leaves the running configuration intact",
   assert.equal(ruleNamed("意见")!.to, "a1");
 });
 
-test("the lookups the hub uses", () => {
-  assert.deepEqual(
-    rulesFor("ops", "alert.raised").map((r) => r.name),
-    ["告警", "告警也记一笔"],
-  );
-  assert.deepEqual(rulesFor("app", "alert.raised"), []);
-  assert.deepEqual(workers(), ["w1", "w2"]);
-  assert.deepEqual(agentsOf("w1"), ["a1", "a3"]);
-  assert.equal(limitOf("notes"), 3);
-  assert.equal(limitOf("ops"), 1);
+test("what's loaded can be read back", () => {
   assert.equal(ruleNamed("早报")!.to, "a1");
   assert.equal(ruleNamed("没有这条"), undefined);
   assert.equal(rules.timezone, "Asia/Shanghai");

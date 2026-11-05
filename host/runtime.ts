@@ -7,10 +7,9 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { HOME, RULES_FILE } from "./home.ts";
 import { credential, digest, whose as keyHolder } from "../kernel/credentials.ts";
 import { decide } from "../kernel/decide.ts";
-import { AuthError, NotFound } from "../kernel/errors.ts";
+import { NotFound } from "../kernel/errors.ts";
 import { evolve, rows, keyOf, statement, type Fact, type Row, type Table } from "../kernel/evolve.ts";
 import * as query from "../kernel/query.ts";
-import { eventRule, typeMatches } from "../kernel/rules.ts";
 import { stateOf as state } from "../kernel/state.ts";
 import { commitLatest, openView } from "../kernel/store.ts";
 import type { Job } from "../protocol/job.ts";
@@ -114,7 +113,7 @@ export function execute(type: string, args: any[], now = Date.now()) {
 
 export const parseRules = (json: string, now = Date.now()) =>
   checkRules(json, now, Intl.DateTimeFormat().resolvedOptions().timeZone);
-export { RulesError, typeMatches };
+export { RulesError };
 export let rules = query.configuration(current);
 let loaded = { file: "", mtime: 0 };
 
@@ -157,11 +156,6 @@ const initial = reloadRules();
 if (!rules) throw new Error(initial.problem ?? "缺少规则");
 
 export const ruleNamed = (name: string) => rules.rules.find((rule) => rule.name === name);
-export const rulesFor = (source: string, type: string) =>
-  rules.rules.filter((rule) => eventRule(rule) && rule.when.source === source && typeMatches(rule.when.types, type));
-export const workers = () => [...new Set(Object.values(rules.agents).map((agent) => agent.worker))];
-export const agentsOf = (worker: string) => query.agentsOf(getView(), worker);
-export const limitOf = (group: string) => rules.rules.find((rule) => rule.group === group)?.parallel ?? 1;
 
 type EventAck = { event: number; duplicate: boolean; routed: string[] };
 export const ingest = (source: string, input: unknown, now = Date.now()): EventAck =>
@@ -211,20 +205,6 @@ export function cardByToken(token: string) {
     "SELECT data FROM projections WHERE collection='cards' AND card_hash(json_extract(data,'$.id'),json_extract(data,'$.created_at'))=?",
   ).get(digest(token));
   return row ? (JSON.parse(String(row.data)) as Row) : undefined;
-}
-
-export function cardAtLink(token: string) {
-  const card = cardByToken(token);
-  if (!card || !Object.values(rules.channels).some((channel) => channel.links)) throw new NotFound("没有这张卡片");
-  return card;
-}
-
-export function answerByLink(token: string, given: Answer, now = Date.now()) {
-  const card = cardAtLink(token);
-  if (now - Date.parse(card.created_at) > 7 * 86400_000) {
-    throw new AuthError(`这个链接过期了。在装它的电脑上运行 agent-autoloop answer ${card.id} 回答`);
-  }
-  return answer(card.id, { ...given, by: "链接" }, now);
 }
 
 export const view = (card: Row, ref: string | null = null, links = false) =>
