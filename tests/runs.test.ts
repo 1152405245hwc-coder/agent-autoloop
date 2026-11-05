@@ -20,8 +20,8 @@ import { test } from "node:test";
 import { at, setup } from "./helpers.ts";
 
 setup("runs");
-const { ingest } = await import("../host/runtime.ts");
-const { claimNext, heartbeat, finish, started, sweep, cancel, cancels } = await import("../host/runtime.ts");
+const { ingest } = await import("./hub.ts");
+const { claimNext, heartbeat, finish, started, sweep, cancel, cancels } = await import("./hub.ts");
 const { AuthError, Conflict, InputError, NotFound } = await import("../kernel/errors.ts");
 const { all, one, run } = await import("./storage.ts");
 
@@ -81,7 +81,7 @@ test("work goes only to its agent's worker, once, with the rule and what to read
 
 test("queued work takes the current agent and folder together; a held claim keeps its configuration", async () => {
   clean();
-  const hub = await import("../host/runtime.ts");
+  const hub = await import("./hub.ts");
   const before = hub.getView().get("config", "rules")!.value;
   const next = structuredClone(before);
   next.rules[0].to = "a2";

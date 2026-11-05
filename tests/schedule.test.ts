@@ -16,9 +16,9 @@ const home = setup("schedule");
 const rulesFile = join(home, "rules.json");
 writeFileSync(rulesFile, readFileSync(process.env.AGENT_AUTOLOOP_RULES!, "utf8"));
 process.env.AGENT_AUTOLOOP_RULES = rulesFile;
-const { execute, reloadRules, tick } = await import("../host/runtime.ts");
-const { ingest } = await import("../host/runtime.ts");
-const { claimNext, finish, started, heartbeat } = await import("../host/runtime.ts");
+const { execute, reloadRules, tick } = await import("./hub.ts");
+const { ingest } = await import("./hub.ts");
+const { claimNext, finish, started, heartbeat } = await import("./hub.ts");
 const { all, one, run } = await import("./storage.ts");
 
 const clean = () => {

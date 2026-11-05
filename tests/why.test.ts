@@ -31,7 +31,7 @@ const rulesSaying = (prompt: string) =>
   });
 writeFileSync(rulesFile, rulesSaying("private-rule-instructions"));
 process.env.AGENT_AUTOLOOP_RULES = rulesFile;
-const hub = await import("../host/runtime.ts");
+const hub = await import("./hub.ts");
 const { serve } = await import("../host/http.ts");
 const server = serve(0);
 await once(server, "listening");

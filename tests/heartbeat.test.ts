@@ -18,7 +18,7 @@ import { parseRules } from "../protocol/rules.ts";
 import { at, setup } from "./helpers.ts";
 
 setup("heartbeat");
-const runtime = await import("../host/runtime.ts");
+const runtime = await import("./hub.ts");
 const { serve } = await import("../host/http.ts");
 
 const SECOND = 1000;

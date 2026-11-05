@@ -18,7 +18,7 @@ import { test } from "node:test";
 import { setup } from "./helpers.ts";
 
 const home = setup("rules");
-const { parseRules, RulesError, rules, ruleNamed, reloadRules, one } = await import("../host/runtime.ts");
+const { parseRules, RulesError, rules, ruleNamed, reloadRules, one } = await import("./hub.ts");
 const { typeMatches } = await import("../kernel/rules.ts");
 
 const good = () => JSON.parse(readFileSync(join(import.meta.dirname, "rules.fixture.json"), "utf8"));
@@ -242,7 +242,7 @@ test("a hub restarting without its rules file comes up on the rules it had; a ne
         "--disable-warning=ExperimentalWarning",
         "--input-type=module",
         "-e",
-        `const hub = await import(${JSON.stringify(new URL("../host/runtime.ts", import.meta.url).href)});` +
+        `const hub = await import(${JSON.stringify(new URL("./hub.ts", import.meta.url).href)});` +
           `console.log(hub.ruleNamed("意见")?.prompt)`,
       ],
       { env: { ...process.env, ...env }, encoding: "utf8" },

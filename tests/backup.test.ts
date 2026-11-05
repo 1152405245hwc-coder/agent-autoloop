@@ -26,7 +26,7 @@ import { promisify } from "node:util";
 import { at, setup } from "./helpers.ts";
 
 const home = setup("backup");
-const hub = await import("../host/runtime.ts");
+const hub = await import("./hub.ts");
 const { backup, restore } = await import("../cli/backup.ts");
 
 const scratch = mkdtempSync(join(tmpdir(), "agent-autoloop-backup-"));

@@ -32,8 +32,8 @@ export default function ({ headers, body, secret }) {
 );
 process.env.AGENT_AUTOLOOP_SECRET_HOOKS = "hook-secret";
 const { serve } = await import("../host/http.ts");
-const { addKey, createCard, getView, reloadRules, view } = await import("../host/runtime.ts");
-const { all, one } = await import("../host/runtime.ts");
+const { addKey, createCard, getView, reloadRules, view } = await import("./hub.ts");
+const { all, one } = await import("./hub.ts");
 
 const keys = {
   app: addKey("source", "app"),

@@ -25,9 +25,9 @@ import { render } from "../plugins/feishu/channel.ts";
 import { formatWhy } from "../cli/why.ts";
 
 setup("cards");
-const { ingest } = await import("../host/runtime.ts");
-const { cancel, claimNext, execute, finish, heartbeat, started, sweep, why } = await import("../host/runtime.ts");
-const { answer, resolve, nextCard, delivered, failed, tell, cardByToken, getView } = await import("../host/runtime.ts");
+const { ingest } = await import("./hub.ts");
+const { cancel, claimNext, execute, finish, heartbeat, started, sweep, why } = await import("./hub.ts");
+const { answer, resolve, nextCard, delivered, failed, tell, cardByToken, getView } = await import("./hub.ts");
 const { AuthError, InputError, NotFound } = await import("../kernel/errors.ts");
 const { all, one, run } = await import("./storage.ts");
 

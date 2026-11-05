@@ -9,12 +9,10 @@ import { stateOf as state, viewStatements } from "./state.ts";
 import { cardHash, digest, whose as keyHolder } from "../kernel/credentials.ts";
 import { decide } from "../kernel/decide.ts";
 import { NotFound } from "../kernel/errors.ts";
-import { evolve, rows, keyOf, statement, type Fact, type Row, type Table } from "../kernel/evolve.ts";
+import { initialize, rows, statement, type Fact, type Row, type Table } from "../kernel/evolve.ts";
 import * as query from "../kernel/query.ts";
 import { commitLatest, openView } from "../kernel/store.ts";
-import type { Job } from "../protocol/job.ts";
 import { parseRules as checkRules, RulesError } from "../protocol/rules.ts";
-import type { Rejected } from "../protocol/validate.ts";
 
 mkdirSync(HOME, { recursive: true, mode: 0o700 });
 chmodSync(HOME, 0o700);
@@ -38,11 +36,8 @@ export const environment = {
 
 export const db = new DatabaseSync(join(HOME, "hub.db"));
 db.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;");
-db.exec(`
-  CREATE TABLE IF NOT EXISTS facts(seq INTEGER PRIMARY KEY, fact TEXT NOT NULL);
-  CREATE TABLE IF NOT EXISTS projections(collection TEXT, key TEXT, data TEXT NOT NULL, PRIMARY KEY(collection, key));
-`);
 db.function("card_hash", { deterministic: true }, (id, at) => cardHash(environment, id, at));
+initialize(db);
 
 // Other processes must see either the old views or the new ones, never the gap between DROP and CREATE.
 db.exec(`BEGIN IMMEDIATE; ${viewStatements.join(";")}; COMMIT`);
@@ -100,7 +95,6 @@ export function execute(type: string, args: any[], now = Date.now()) {
 
 export const parseRules = (json: string, now = Date.now()) =>
   checkRules(json, now, Intl.DateTimeFormat().resolvedOptions().timeZone);
-export { RulesError };
 export let rules = query.configuration(current);
 
 export function reloadRules(file = RULES_FILE): { problem?: string } {
@@ -132,24 +126,6 @@ function unreadable(file: string, error: NodeJS.ErrnoException) {
 const initial = reloadRules();
 if (!rules) throw new Error(initial.problem ?? "缺少规则");
 
-export const ruleNamed = (name: string) => rules.rules.find((rule) => rule.name === name);
-
-type EventAck = { event: number; duplicate: boolean; routed: string[] };
-export const ingest = (source: string, input: unknown, now = Date.now()): EventAck =>
-  execute("ingest", [source, input], now);
-export const claimNext = (worker: string, claim: string, now = Date.now()): Job | null =>
-  execute("claimNext", [worker, claim], now);
-export const heartbeat = (worker: string, running: number[], now = Date.now()) =>
-  execute("heartbeat", [worker, running], now);
-export const started = (run: number, token: string, input: unknown, now = Date.now()) =>
-  execute("started", [run, token, input], now);
-type ReceiptAck = { rejected: Rejected[]; duplicate?: boolean };
-export const finish = (run: number, token: string, input: unknown, now = Date.now()): ReceiptAck =>
-  execute("finish", [run, token, input], now);
-export const cancel = (run: number, now = Date.now()) => execute("cancel", [run], now);
-export const cancels = (worker: string) => query.cancels(getView(), worker);
-export const sweep = (now = Date.now()) => execute("sweep", [], now);
-
 let toldOf: string | undefined;
 
 export function tick(now = Date.now()) {
@@ -159,22 +135,6 @@ export function tick(now = Date.now()) {
   toldOf = problem;
   execute("tick", [], now);
 }
-
-export const createCard = (spec: Row, now = Date.now()) => execute("createCard", [spec], now);
-type CardAck = { card: number; duplicate: boolean };
-export const tell = (key: string, title: string, text: string, now = Date.now()): CardAck =>
-  execute("tell", [key, title, text], now);
-export type Answer = { choice?: number; text?: string; by?: string; channel?: string; ref?: string };
-export const answer = (id: number, given: Answer, now = Date.now()): { changed: boolean; state: string } =>
-  execute("answer", [id, given], now);
-export const resolve = (id: number, reason: string, by: string, now = Date.now()): boolean =>
-  execute("resolve", [id, reason, by], now);
-export const nextCard = (channel: string, now = Date.now()): ReturnType<typeof query.cardView> | null =>
-  execute("nextCard", [channel], now);
-export const delivered = (channel: string, id: number, version: number, ref: string | null, now = Date.now()) =>
-  execute("delivered", [channel, id, version, ref], now);
-export const failed = (channel: string, id: number, version: number, error: string, now = Date.now()) =>
-  execute("failed", [channel, id, version, error], now);
 
 export function cardByToken(token: string) {
   const row = statement(
@@ -200,7 +160,6 @@ export function addKey(kind: KeyKind, name: string, now = Date.now()) {
   return key;
 }
 
-export const removeKey = (kind: KeyKind, name: string) => execute("removeKey", [kind, name]) as boolean;
 export const listKeys = () =>
   all<{ kind: string; name: string; created_at: string }>("SELECT kind,name,created_at FROM keys ORDER BY kind,name");
 export const whose = (kind: string, key: string) => keyHolder(getView(), kind, key);
@@ -234,13 +193,4 @@ export function why(id: number) {
   for (const event of events) include("events", event);
   for (const card of cards) include("cards", card.id);
   return [...sequences].sort((a, b) => a - b).map((seq) => query.safeFact(read(seq)));
-}
-
-// Test fixtures use this to discard rows without changing the behavioral assertions inherited from the SQL kernel.
-export function fixtureClear(table: Table) {
-  const latest = getView();
-  const changes = rows(latest, table)
-    .map((row) => keyOf(table, row))
-    .map((key) => ({ table, key, row: null }));
-  current = evolve(latest, [{ version: 1, seq: latest.seq, at: 0, type: "fixture", changes }], db);
 }

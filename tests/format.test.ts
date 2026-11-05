@@ -64,7 +64,7 @@ test("a start with nothing changed keeps the format it stored", () => {
 test("what doesn't decide what's stored can change without a rebuild", () => {
   const usual = start();
   for (const [file, before, after] of [
-    ["host/runtime.ts", "export const ruleNamed", "// a comment\nexport const ruleNamed"],
+    ["host/runtime.ts", "export const listKeys", "// a comment\nexport const listKeys"],
     ["host/runtime.ts", "const { problem } = reloadRules();", 'const { problem } = reloadRules(); void "other work";'],
     ["kernel/decide.ts", "const MAX_ATTEMPTS = 10;", "const MAX_ATTEMPTS = 11;"],
     ["host/state.ts", 'summary error usage"', 'summary error usage extra"'],

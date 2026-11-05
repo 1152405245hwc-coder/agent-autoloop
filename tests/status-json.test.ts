@@ -10,7 +10,7 @@ import { after, test } from "node:test";
 import { setup } from "./helpers.ts";
 
 const home = setup("status-json");
-const hub = await import("../host/runtime.ts");
+const hub = await import("./hub.ts");
 const { serve } = await import("../host/http.ts");
 const server = serve(0);
 await once(server, "listening");
