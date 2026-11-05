@@ -93,6 +93,16 @@ async function clearLabels(number: number, pr: any, io: DeliveryIO) {
   }
 }
 
+async function synced(number: number, head: string, base: string, io: DeliveryIO) {
+  const until = Date.now() + 15 * 60_000;
+  for (;;) {
+    const pr = await io.api(`pulls/${number}`);
+    if (pr.head.sha !== head && (await io.contains(base, pr.head.sha))) return pr;
+    if (Date.now() > until) throw new Error("已请求同步 main，15 分钟内没有看到同步后的提交，稍后重试");
+    await io.wait();
+  }
+}
+
 export async function deliver(
   repo: string,
   number: number,
@@ -113,14 +123,25 @@ export async function deliver(
   const file = await io.api(`contents/ops/delivery.json?ref=${main}`);
   const config = settings(JSON.parse(Buffer.from(file.content, "base64").toString("utf8")), testLocalHealth);
   if (config.repo !== repo) throw new Error("main 的 repo 设置与交付仓库不一致");
-  const head = pr.head.sha;
+  let head = pr.head.sha;
   await status(io, head, "delivery", "pending", "正在审查、检查和核实发布");
-  if (!pr.merged_at) {
-    if (!(await io.contains(main, head))) {
+  // Sync inside the run: a thrown sync waits out the hub's growing retry backoff while main keeps moving.
+  for (let round = 1; !pr.merged_at; round++) {
+    let base = (await io.api("git/ref/heads/main")).object.sha;
+    if (!(await io.contains(base, head))) {
       await io.api(`pulls/${number}/update-branch`, { expected_head_sha: head }, "PUT");
-      throw new Error("已请求同步 main，稍后重新审查同步后的提交");
+      pr = await synced(number, head, base, io);
+      head = pr.head.sha;
+      await status(io, head, "delivery", "pending", "已同步 main，正在审查、检查和核实发布");
+      // GitHub syncs with main as it is by then, which may be newer than what was read above: against the older one, those
+      // commits would be reviewed as the branch's own.
+      base = (await io.api("git/ref/heads/main")).object.sha;
+      if (!(await io.contains(base, head))) {
+        if (round < 3) continue;
+        throw new Error("main 已前进，稍后重新同步和检查");
+      }
     }
-    const findings = await io.review(pr, config, main);
+    const findings = await io.review(pr, config, base);
     const current = await io.api(`pulls/${number}`);
     if (current.head.sha !== head) throw new Error("审查期间提交变了，等待重新交付");
     if (findings.length) {
@@ -141,9 +162,12 @@ export async function deliver(
     pr = await io.api(`pulls/${number}`);
     if (pr.head.sha !== head) throw new Error("要合并的提交没有经过本轮审查");
     if (!pr.merged_at) {
-      if ((await io.api("git/ref/heads/main")).object.sha !== main) throw new Error("main 已前进，稍后重新同步和检查");
       if (!labels(pr).has("deliver")) return { summary: "交付标记已撤回" };
       if (labels(pr).has("deliver-review")) return reviewOnly(pr);
+      if ((await io.api("git/ref/heads/main")).object.sha !== base) {
+        if (round < 3) continue;
+        throw new Error("main 已前进，稍后重新同步和检查");
+      }
       await status(io, head, config.review.status, "success", "此提交审查通过，完整检查通过");
       try {
         await io.merge(pr, config);

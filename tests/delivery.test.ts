@@ -2,7 +2,9 @@
 // during review or main advancing after checks gets an unreviewed attestation; a dropped merge is repeated; auto-merge
 // survives a refusal; health hides a failed/unfinished Ship; a later release changes an already completed handoff;
 // a successful label deletion with a lost response turns a completed deployment into a false failure;
-// switching to review-only while checks run still merges the PR.
+// switching to review-only while checks run still merges the PR; a PR behind main ends the run after requesting a
+// sync and waits out the hub's growing retry delay while main keeps moving; commits GitHub synced beyond the main that was
+// read are reviewed as the branch's own; a delivery withdrawn while main moves on still syncs and reviews again.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { deliver, fullCheck, waitLive, disableAuto, type DeliveryIO } from "../plugins/delivery/delivery.ts";
@@ -132,14 +134,80 @@ test("a PR pushed during review gets no attestation and is never merged", async 
   assert.equal(state.merges, 0);
   assert.ok(!state.statuses.some((s: any) => s.context === "my-review"));
 });
-test("main advancing after review invalidates the merge gate", async () => {
+function syncing(io: DeliveryIO, state: any) {
+  const api = io.api;
+  io.contains = async (a, b) => a === b || b === `synced-${a}` || (a === "main" && b === "head");
+  io.api = async (path, body, method) => {
+    if (path === "pulls/1/update-branch") {
+      state.writes.push(path);
+      state.pr.head.sha = `synced-${state.main}`;
+      return {};
+    }
+    if (path.startsWith("actions/workflows/check.yml"))
+      return { workflow_runs: [{ ...run(1, state.pr.head.sha), event: "pull_request" }] };
+    return api(path, body, method);
+  };
+}
+test("main advancing after review syncs in the same run and attests only the re-reviewed head", async () => {
   const { io, state } = fixture();
+  syncing(io, state);
   io.review = async () => {
-    state.main = "new-main";
+    if (++state.reviewed === 1) state.main = "new-main";
+    return [];
+  };
+  const result = await deliver("example/app", 1, io);
+  assert.equal(result.merged, "merged");
+  assert.equal(state.reviewed, 2);
+  assert.equal(state.merges, 1);
+  assert.deepEqual(
+    state.statuses.filter((s: any) => s.context === "my-review").map((s: any) => s.path),
+    ["statuses/synced-new-main"],
+  );
+});
+test("main that keeps advancing stops after three rounds without merging", async () => {
+  const { io, state } = fixture();
+  syncing(io, state);
+  io.review = async () => {
+    state.main = `main-${++state.reviewed}`;
     return [];
   };
   await assert.rejects(() => deliver("example/app", 1, io), /main/);
+  assert.equal(state.reviewed, 3);
   assert.equal(state.merges, 0);
+  assert.ok(!state.statuses.some((s: any) => s.context === "my-review"));
+});
+test("the review leaves out what GitHub synced beyond the main it was asked for", async () => {
+  const { io, state } = fixture();
+  syncing(io, state);
+  const { api, contains } = io;
+  // main moves on before GitHub applies the update, so the new head holds a main newer than the one read first.
+  io.api = async (path, body, method) => {
+    if (path === "pulls/1/update-branch") state.main = "newer";
+    return api(path, body, method);
+  };
+  io.contains = async (a, b) => (a === "main" && b === "synced-newer") || contains(a, b);
+  const bases: string[] = [];
+  io.review = async (_pr, _config, base) => {
+    bases.push(base);
+    return [];
+  };
+  state.pr.head.sha = "behind";
+  assert.equal((await deliver("example/app", 1, io)).merged, "merged");
+  assert.deepEqual(bases, ["newer"]);
+});
+test("a delivery withdrawn while main moves on stops without touching the branch again", async () => {
+  const { io, state } = fixture();
+  syncing(io, state);
+  io.review = async () => {
+    state.reviewed++;
+    state.main = "new-main";
+    state.pr.labels = [];
+    return [];
+  };
+  assert.equal((await deliver("example/app", 1, io)).summary, "交付标记已撤回");
+  assert.equal(state.reviewed, 1);
+  assert.equal(state.merges, 0);
+  assert.ok(!state.writes.includes("pulls/1/update-branch"));
 });
 test("findings and review-only mode stop before merge", async () => {
   const first = fixture();
