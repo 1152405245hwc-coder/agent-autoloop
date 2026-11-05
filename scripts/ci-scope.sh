@@ -1,10 +1,15 @@
 #!/bin/sh
-# Says how much CI a pull request needs, as scope=docs, normal, kernel or full. The slow simulations only cover kernel/,
-# protocol/ and sim/, so other code skips them, and text no test reads skips everything. kernel/ and protocol/ get a short
-# simulation, since breaking each kernel condition in turn showed the quick tests already catch what the long runs do. A
-# file this doesn't name, or a diff it can't get, means full. So does everything that reaches main, text too: the long runs
-# still come, 12 minutes behind, and a commit whose run a newer push replaced is checked by the next one, whatever that is.
+# Says how much CI a run needs, as scope=docs, normal, kernel or full. The slow simulations only cover kernel/, protocol/
+# and sim/, so other code skips them, and text no test reads skips everything. kernel/ and protocol/ get a short simulation,
+# since breaking each kernel condition in turn showed the quick tests already catch what the long runs do. A file this
+# doesn't name, or a diff it can't get, means full. What reaches main gets the quick tests, text too: a commit whose run a
+# newer push replaced is checked by the next one, whatever that is. The long runs come with nightly, and before a release.
 set -u
+
+if [ "${GITHUB_EVENT_NAME:-}" = push ]; then
+  echo "scope=normal"
+  exit 0
+fi
 
 # Without --no-renames, moving a file out of kernel/ would show only where it landed.
 if [ "${GITHUB_EVENT_NAME:-}" != pull_request ] ||

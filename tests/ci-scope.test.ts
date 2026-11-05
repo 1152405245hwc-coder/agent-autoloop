@@ -1,6 +1,6 @@
 // How much CI a change gets. Failure cases: a change to kernel code skips the short simulation; code, or text a test reads,
 // counts as text and runs nothing; a file nobody has sorted out yet skips anything; a move out of kernel/ counts only where
-// it landed; what reaches main skips the full run, so a commit whose run was cancelled or replaced is never checked; a diff
+// it landed; what reaches main skips the tests, so a commit whose run was cancelled or replaced is never checked; a diff
 // that can't be read means less checking rather than more.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -91,9 +91,9 @@ test("moving a file out of kernel/ counts where it left", () => {
   assert.equal(scope(root), "scope=kernel");
 });
 
-test("whatever reaches main gets the full run, text included", () => {
-  assert.equal(scope(touching("README.md"), "push"), "scope=full");
-  assert.equal(scope(touching("worker/worker.ts"), "push"), "scope=full");
+test("whatever reaches main gets the quick tests, text included, and a run asked for by hand the full run", () => {
+  assert.equal(scope(touching("README.md"), "push"), "scope=normal");
+  assert.equal(scope(touching("kernel/decide.ts"), "push"), "scope=normal");
   assert.equal(scope(touching("README.md"), "workflow_dispatch"), "scope=full");
 });
 
