@@ -26,7 +26,7 @@ import type { Job } from "../protocol/job.ts";
 import { addUsage, type Notice, type Result } from "../protocol/validate.ts";
 import { adapterFor, type Adapter, type Reading, type Turn, type Usage } from "./agents.ts";
 import { promptFor, readMessage, repairPrompt, resultFrom } from "./contract.ts";
-import { loadUsage, saveUsage, usageDelta } from "./usage.ts";
+import { forgetOldUsage, loadUsage, saveUsage, usageDelta } from "./usage.ts";
 
 const RUNS = path.join(HOME, "worker", "runs");
 const NOTHING: Usage = { input: 0, output: 0, cached: 0, cost: 0 };
@@ -37,6 +37,8 @@ const GRACE = 30_000;
 const STOP_GRACE = 10_000;
 const REPAIRS = 2;
 const KEEP_DAYS = 14;
+/** A worker can run for months, so clearing can't wait for it to start again. */
+const TIDY_EVERY = 60 * 60_000;
 const WAIT = 50;
 const PAUSE = 30_000;
 const UNREACHABLE = 10 * 60_000;
@@ -315,7 +317,7 @@ export function createWorker({
     });
     const notice: Notice = {
       title: `「${entry.job.rule.name}」的回执读不懂`,
-      text: `这一轮按第一行算结束了，但它要中台做的事没有生效（${problem}）。原文在 ${files(original).out}。`,
+      text: `这一轮按第一行算结束了，但它要中台做的事没有生效（${problem}）。原文在 ${files(original).out}，留 ${KEEP_DAYS} 天。`,
     };
     endWith(entry, { ...result, notice: [...(result.notice ?? []), notice] });
   }
@@ -534,8 +536,17 @@ export function createWorker({
   function tidy(moment = now()) {
     for (const id of readdirSync(RUNS)) {
       const dir = path.join(RUNS, id);
-      const expired = moment - statSync(dir).mtimeMs > KEEP_DAYS * 24 * 3600_000;
-      if (!existsSync(path.join(dir, "entry.json")) && expired) rmSync(dir, { recursive: true, force: true });
+      try {
+        const expired = moment - statSync(dir).mtimeMs > KEEP_DAYS * 24 * 3600_000;
+        if (!existsSync(path.join(dir, "entry.json")) && expired) rmSync(dir, { recursive: true, force: true });
+      } catch (error) {
+        sayOnce(`couldn't clear ${dir}: ${error}`);
+      }
+    }
+    try {
+      forgetOldUsage(moment);
+    } catch (error) {
+      sayOnce(`couldn't clear old session totals: ${error}`);
     }
   }
 
@@ -543,8 +554,12 @@ export function createWorker({
     log(`worker ${name} started`);
     // Started again after trouble, it may be what went: nothing else would bring it back, and every round needs it.
     mkdirSync(RUNS, { recursive: true, mode: 0o700 });
-    tidy();
+    let tidied = -Infinity;
     while (!signalled.aborted) {
+      if (now() - tidied >= TIDY_EVERY) {
+        tidied = now();
+        tidy(tidied);
+      }
       if (!(await tick())) await new Promise((resolve) => setTimeout(resolve, PAUSE));
     }
   }
