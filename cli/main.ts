@@ -43,7 +43,7 @@ const HELP = `Agent 自动化中台
   agent-autoloop key remove <种类> <名字>  立即收回一把密钥
   agent-autoloop add <git 地址>           安装插件，不自动更新
   agent-autoloop mcp                      用标准输入输出连接 MCP 客户端
-  agent-autoloop join <中台地址> --worker <名字> --key <密钥>
+  agent-autoloop join <中台地址> --worker <名字> --key <密钥> [--no-service]
                                     另一台电脑只接活时用
   agent-autoloop backup [目录]           备份数据库、主密钥和配置；不填目录就放在 ~/.agent-autoloop/backups
   agent-autoloop restore <目录> [--yes]  停掉中台后，用一次备份恢复本机数据
@@ -80,6 +80,50 @@ const UNINSTALL_USAGE = `用法：agent-autoloop uninstall [--yes]
 卸载程序并保留规则、密钥和记录。
   --yes  跳过确认`;
 
+const RESTORE_USAGE = `用法：agent-autoloop restore <目录> [--yes]
+
+恢复会替换本机的数据库、主密钥和配置文件；先停掉中台，--yes 跳过确认。`;
+
+/** What each command reads besides its own words, and how to use it. */
+const TAKES: Record<string, { flags: string[]; usage: string }> = {
+  add: { flags: [], usage: "用法：agent-autoloop add <git 地址>" },
+  answer: { flags: ["text"], usage: "用法：agent-autoloop answer <卡片> [序号] [--text 别的想法]" },
+  backup: { flags: [], usage: "用法：agent-autoloop backup [目录]" },
+  check: { flags: [], usage: "用法：agent-autoloop check" },
+  conformance: { flags: ["config"], usage: "用法：agent-autoloop conformance <测试中台地址> --config <测试凭据文件>" },
+  doctor: { flags: [], usage: "用法：agent-autoloop doctor" },
+  emit: {
+    flags: ["dry-run", "subject", "summary", "detail", "link", "id", "key"],
+    usage:
+      "用法：agent-autoloop emit <类型> [--dry-run] [--subject x] [--summary x] [--detail x] [--link x] [--id x] [--key 来源密钥]",
+  },
+  init: { flags: ["agent", "command", "port", "no-service"], usage: INIT_USAGE },
+  join: {
+    flags: ["worker", "key", "no-service"],
+    usage: "用法：agent-autoloop join <中台地址> --worker <名字> --key <密钥> [--no-service]",
+  },
+  key: {
+    flags: [],
+    usage: `用法：agent-autoloop key new <source|worker|channel|owner> <名字>
+      agent-autoloop key list
+      agent-autoloop key remove <种类> <名字>`,
+  },
+  mcp: { flags: [], usage: "用法：agent-autoloop mcp" },
+  // Only its first word is read as anything: the rest is a result in someone's own words, dashes and all.
+  resolve: { flags: [], usage: "用法：agent-autoloop resolve <卡片> <结果>" },
+  restore: { flags: ["yes"], usage: RESTORE_USAGE },
+  rules: { flags: [], usage: "用法：agent-autoloop rules explain" },
+  service: { flags: [], usage: "用法：agent-autoloop service install|remove" },
+  status: { flags: ["json"], usage: STATUS_USAGE },
+  stop: { flags: [], usage: "用法：agent-autoloop stop <第几轮>" },
+  tell: { flags: ["task"], usage: "用法：agent-autoloop tell <编号> [--task 定时任务名]，内容从标准输入读" },
+  try: { flags: [], usage: TRY_USAGE },
+  uninstall: { flags: ["yes"], usage: UNINSTALL_USAGE },
+  up: { flags: [], usage: "用法：agent-autoloop up" },
+  update: { flags: [], usage: UPDATE_USAGE },
+  why: { flags: ["json"], usage: "用法：agent-autoloop why <第几轮> [--json]" },
+};
+
 type Flags = Record<string, string | true>;
 
 function flags(args: string[]) {
@@ -103,18 +147,16 @@ const fail = (words: string): never => {
 };
 
 /**
- * The flags a command does read, or a stop naming the ones it does not. A misspelt --port would otherwise install with
- * the default in silence, and --help would install at all.
+ * Stops at a flag the command doesn't read. A misspelt --port would otherwise install with the default in silence, and
+ * --help would install at all.
  */
-function flagsOf(args: string[], allowed: string[], usage: string) {
+function refuseUnknownFlags(args: string[], { flags: known, usage }: { flags: string[]; usage: string }) {
   if (args.includes("--help") || args.includes("-h")) {
     console.log(usage);
     process.exit(0);
   }
-  const parsed = flags(args);
-  const unknown = Object.keys(parsed.named).filter((name) => !allowed.includes(name));
+  const unknown = Object.keys(flags(args).named).filter((name) => !known.includes(name));
   if (unknown.length) fail(`不认识的参数：${unknown.map((name) => `--${name}`).join("、")}\n\n${usage}`);
-  return parsed;
 }
 
 const client = (key: string, config = readConfig()) => hubClient(config.url, key);
@@ -195,7 +237,9 @@ async function agentsToUse(named: Flags, worker: string) {
 }
 
 async function init(args: string[]) {
-  const { named } = flagsOf(args, ["agent", "command", "port", "no-service"], INIT_USAGE);
+  const { named, rest } = flags(args);
+  // `init -p 4000` would otherwise install on the default port in silence.
+  if (rest.length) return fail(`不认识的参数：${rest.join(" ")}\n\n${INIT_USAGE}`);
   if (existsSync(CONFIG_FILE)) return fail(`已经装过了：${CONFIG_FILE}`);
   mkdirSync(HOME, { recursive: true, mode: 0o700 });
   mkdirSync(path.join(HOME, "try"), { recursive: true });
@@ -243,7 +287,7 @@ async function join(args: string[]) {
   const [url] = rest;
   const name = text(named.worker);
   const key = text(named.key);
-  if (!url || !name || !key) return fail("用法：agent-autoloop join <中台地址> --worker <名字> --key <密钥>");
+  if (!url || !name || !key) return fail(TAKES.join.usage);
   // Joining another hub must not silently replace this machine's existing hub, worker or owner keys.
   if (existsSync(CONFIG_FILE)) {
     return fail(`已经配置过了：${CONFIG_FILE}。为防止覆盖现有设置，请先备份并手动修改配置。`);
@@ -384,7 +428,7 @@ async function status(named: Flags) {
 async function answer(args: string[]) {
   const { named, rest } = flags(args);
   const card = Number(rest[0]);
-  if (!Number.isInteger(card) || card < 1) return fail("用法：agent-autoloop answer <卡片> [序号] [--text 别的想法]");
+  if (!Number.isInteger(card) || card < 1) return fail(TAKES.answer.usage);
   const words = text(named.text);
   const done = await ownerClient().answer(card, {
     ...(rest[1] !== undefined && { choice: Number(rest[1]) - 1 }),
@@ -402,7 +446,7 @@ async function answer(args: string[]) {
 async function resolve(args: string[]) {
   const [id, ...words] = args;
   const card = Number(id);
-  if (!Number.isInteger(card) || card < 1 || !words.length) return fail("用法：agent-autoloop resolve <卡片> <结果>");
+  if (!Number.isInteger(card) || card < 1 || !words.length) return fail(TAKES.resolve.usage);
   const { changed } = await ownerClient().resolve(card, words.join(" "));
   console.log(changed ? "结案了。" : "这张卡片已经处理过了，这次没有改动。");
 }
@@ -509,7 +553,7 @@ async function key(args: string[]) {
 async function emit(args: string[]) {
   const { named, rest } = flags(args);
   const config = readConfig();
-  const type = rest[0] ?? fail("用法：agent-autoloop emit <类型> [--dry-run]");
+  const type = rest[0] ?? fail(TAKES.emit.usage);
   const event = {
     id: text(named.id) ?? randomUUID(),
     type,
@@ -533,7 +577,7 @@ async function emit(args: string[]) {
 }
 
 async function backupCommand(args: string[]) {
-  const { rest } = flagsOf(args, [], "用法：agent-autoloop backup [目录]");
+  const { rest } = flags(args);
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const target = path.resolve(rest[0] ?? path.join(HOME, "backups", stamp));
   const { backup } = await import("./backup.ts");
@@ -542,10 +586,8 @@ async function backupCommand(args: string[]) {
 }
 
 async function restoreCommand(args: string[]) {
-  const usage =
-    "用法：agent-autoloop restore <目录> [--yes]\n\n恢复会替换本机的数据库、主密钥和配置文件；先停掉中台，--yes 跳过确认。";
-  const { named, rest } = flagsOf(args, ["yes"], usage);
-  if (!rest[0]) return fail(usage);
+  const { named, rest } = flags(args);
+  if (!rest[0]) return fail(RESTORE_USAGE);
   if (named.yes === undefined) {
     if (!process.stdin.isTTY) return fail("恢复会替换本机数据；确认后运行 agent-autoloop restore <目录> --yes");
     const answer = await askAtTerminal("恢复会替换本机的数据库、主密钥和配置文件，继续？[y/N] ");
@@ -560,8 +602,8 @@ async function restoreCommand(args: string[]) {
 }
 
 async function rulesCommand(args: string[]) {
-  const { rest } = flagsOf(args, [], "用法：agent-autoloop rules explain");
-  if (rest[0] !== "explain" || rest.length > 1) return fail("用法：agent-autoloop rules explain");
+  const { rest } = flags(args);
+  if (rest[0] !== "explain" || rest.length > 1) return fail(TAKES.rules.usage);
   const { explainRules } = await import("./explain.ts");
   for (const line of explainRules(readFileSync(RULES_FILE, "utf8"), Date.now())) console.log(line);
 }
@@ -569,7 +611,7 @@ async function rulesCommand(args: string[]) {
 async function tell(args: string[]) {
   const { named, rest } = flags(args);
   const config = readConfig();
-  const matter = rest[0] ?? fail("用法：agent-autoloop tell <编号> [--task 定时任务名]，内容从标准输入读");
+  const matter = rest[0] ?? fail(TAKES.tell.usage);
   const words = readFileSync(0, "utf8").trim();
   if (!words) return fail("要说的话从标准输入传，不能为空。");
   const task = text(named.task);
@@ -590,7 +632,7 @@ async function why(args: string[]) {
 async function checkConformance(args: string[]) {
   const { named, rest } = flags(args);
   const file = text(named.config) ?? process.env.AGENT_AUTOLOOP_CONFORMANCE;
-  if (!rest[0] || !file) return fail("用法：agent-autoloop conformance <测试中台地址> --config <测试凭据文件>");
+  if (!rest[0] || !file) return fail(TAKES.conformance.usage);
   const { conformance } = await import("../protocol/conformance.ts");
   console.log(JSON.stringify(await conformance(rest[0], JSON.parse(readFileSync(file, "utf8"))), null, 2));
 }
@@ -603,12 +645,12 @@ async function stop(args: string[]) {
 function service(args: string[]) {
   if (args[0] === "install") return installService();
   if (args[0] === "remove") return removeService();
-  fail("用法：agent-autoloop service install|remove");
+  fail(TAKES.service.usage);
 }
 
 /** A plugin is a folder of its own under this install, named after its repository. */
 function addPlugin(args: string[]) {
-  const url = args[0] ?? fail("用法：agent-autoloop add <git 地址>");
+  const url = args[0] ?? fail(TAKES.add.usage);
   const name = url
     .replace(/\/$/, "")
     .split(/[/:]/)
@@ -645,11 +687,8 @@ const commands: Record<string, () => unknown> = {
   init: () => init(args),
   join: () => join(args),
   up: async () => (await import("../host/up.ts")).up(),
-  try: () => {
-    flagsOf(args, [], TRY_USAGE);
-    return tryIt();
-  },
-  status: () => status(flagsOf(args, ["json"], STATUS_USAGE).named),
+  try: () => tryIt(),
+  status: () => status(flags(args).named),
   why: () => why(args),
   conformance: () => checkConformance(args),
   answer: () => answer(args),
@@ -663,23 +702,22 @@ const commands: Record<string, () => unknown> = {
   stop: () => stop(args),
   backup: () => backupCommand(args),
   restore: () => restoreCommand(args),
-  update: () => {
-    flagsOf(args, [], UPDATE_USAGE);
-    return update();
-  },
+  update,
   uninstall: async () => {
-    const { named } = flagsOf(args, ["yes"], UNINSTALL_USAGE);
     const { uninstall } = await import("./uninstall.ts");
-    await uninstall(named.yes !== undefined, process.stdin.isTTY ? askAtTerminal : null);
+    await uninstall(flags(args).named.yes !== undefined, process.stdin.isTTY ? askAtTerminal : null);
   },
   service: () => service(args),
   help: () => console.log(HELP),
+  "--help": () => console.log(HELP),
+  "-h": () => console.log(HELP),
   "--version": () => console.log(versionLine()),
 };
 if (!command || !commands[command]) {
   console.log(HELP);
   if (command) process.exit(1);
 } else {
+  if (TAKES[command]) refuseUnknownFlags(command === "resolve" ? args.slice(0, 1) : args, TAKES[command]);
   Promise.resolve()
     .then(commands[command])
     .catch((error) => fail(error.message ?? String(error)));
