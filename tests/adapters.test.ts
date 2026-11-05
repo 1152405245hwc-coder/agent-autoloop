@@ -27,6 +27,7 @@ type Adapter = import("../worker/agents.ts").Adapter;
 const claude: Adapter = (await import("../plugins/claude/agent.ts")).default;
 const codex: Adapter = (await import("../plugins/codex/agent.ts")).default;
 const command: Adapter = (await import("../plugins/command/agent.ts")).default;
+const dsh: Adapter = (await import("../plugins/dsh/agent.ts")).default;
 
 const turn = {
   prompt: "做这件事",
@@ -285,7 +286,7 @@ test("a program that isn't there says so", () => {
 
 test("a line of output that's JSON but no message is noise to every plugin", () => {
   const noise = 'null\n42\n"words"\n[]\n';
-  for (const adapter of [claude, codex, command]) {
+  for (const adapter of [claude, codex, command, dsh]) {
     assert.doesNotThrow(() => adapter.read(noise, null, ""));
     assert.doesNotThrow(() => adapter.read(noise, 0, ""));
   }
