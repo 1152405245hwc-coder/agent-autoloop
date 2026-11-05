@@ -85,12 +85,15 @@ export function createIO(repo: string, folder: string): DeliveryIO {
       return ancestors.get(key)!;
     },
     async releaseRequired(base, head, patterns) {
+      let full = base;
       try {
-        fetchObjects(base, head);
+        // A health check may report a short commit, and a fetch only takes a full one.
+        if (base.length < 40) full = (await api(`commits/${base}`)).sha;
+        fetchObjects(full, head);
       } catch {
         return true;
       }
-      return releaseRequired(bare, base, head, patterns);
+      return releaseRequired(bare, full, head, patterns);
     },
     live: liveRelease,
     async wait() {
