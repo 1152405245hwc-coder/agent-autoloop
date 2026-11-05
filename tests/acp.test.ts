@@ -1,15 +1,17 @@
 // Failure modes: loading history becomes this turn's answer; a restarted bridge forgets the agent's session; thought/tool
 // output becomes a receipt; unknown permissions are approved; paths escape through symlinks; an RPC error looks successful;
 // a turn the agent took and then lost isn't marked as started, so the worker runs its prompt again; a session that couldn't
-// be loaded is marked as started, so the worker never starts a new one.
+// be loaded is marked as started, so the worker never starts a new one; an agent is told a version number left behind by a
+// release.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync, symlinkSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import acp from "../plugins/acp/agent.ts";
 import { permission } from "../plugins/acp/bridge.ts";
+import { versionName } from "../host/version.ts";
 const home = mkdtempSync(join(tmpdir(), "agent-autoloop-acp-"));
 after(() => rmSync(home, { recursive: true, force: true }));
 const fake = join(home, "fake.mjs");
@@ -17,10 +19,11 @@ writeFileSync(
   fake,
   `
 import readline from 'node:readline';
+import { writeFileSync } from 'node:fs';
 const send=x=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',...x})+'\\n');
 const update=(sessionUpdate,text)=>send({method:'session/update',params:{sessionId:'agent-session',update:{sessionUpdate,content:{type:'text',text}}}});
 readline.createInterface({input:process.stdin}).on('line',line=>{const m=JSON.parse(line);if(m.id===undefined)return;
-if(m.method==='initialize')send({id:m.id,result:{protocolVersion:1,agentCapabilities:{loadSession:true}}});
+if(m.method==='initialize'){writeFileSync(${JSON.stringify(join(home, "client-version"))},m.params.clientInfo.version);send({id:m.id,result:{protocolVersion:1,agentCapabilities:{loadSession:true}}});}
 if(m.method==='session/new')send({id:m.id,result:{sessionId:'agent-session'}});
 if(m.method==='session/load'){if(m.params.sessionId!=='agent-session')return send({id:m.id,error:{code:-1,message:'bad session'}});update('agent_message_chunk','旧历史');send({id:m.id,result:{}});}
 if(m.method==='session/prompt'){if(m.params.prompt[0].text==='中途断了'){update('tool_call','');process.exit(9);}update('agent_thought_chunk','思考');update('agent_message_chunk','中间消息');update('tool_call','');update('agent_message_chunk',m.params.prompt[0].text);send({id:m.id,result:{stopReason:'end_turn'}});}
@@ -114,4 +117,9 @@ test("ACP refuses incompatible versions and premature process exit", async () =>
   } finally {
     writeFileSync(fake, original);
   }
+});
+
+test("the agent is told which version this is", async () => {
+  await run(null);
+  assert.equal(readFileSync(join(home, "client-version"), "utf8"), versionName());
 });

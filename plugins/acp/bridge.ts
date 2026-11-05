@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import { createInterface } from "node:readline";
+import { versionName } from "../../host/version.ts";
 import type { Turn } from "../../worker/agents.ts";
 
 function resolved(file: string): string {
@@ -88,7 +89,7 @@ export async function bridge(turn: Turn) {
   const stop = () => child.kill("SIGTERM");
   process.on("SIGTERM", stop);
   try {
-    const clientInfo = { name: "agent-autoloop", version: "1.0.0" };
+    const clientInfo = { name: "agent-autoloop", version: versionName() };
     const init = await rpc("initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo });
     if (init.protocolVersion !== 1) throw new Error(`不支持 ACP 版本 ${init.protocolVersion}`);
     if (turn.resume) {

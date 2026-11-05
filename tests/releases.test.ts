@@ -4,7 +4,7 @@
 // asked to follow, or run over with the installer and left unable to update; a failed look at the releases counts as being
 // up to date or as there being none, which would install main, or an update with nothing new restarts the service; a copy is
 // sent to v1.0.0, which can only pull a branch, so could never leave; a tag moved on the server stops updates; installing says
-// something about detached HEADs. No network: git's own insteadOf points the public address at a repository made here.
+// something about detached HEADs; a copy that fetched only its own tag can't say which release it is. No network: git's own insteadOf points the public address at a repository made here.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
@@ -22,6 +22,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { updateCode } from "../cli/update.ts";
+import { releaseOf } from "../host/version.ts";
 
 const PUBLISHED = "https://github.com/KKKKhazix/agent-autoloop.git";
 const script = join(import.meta.dirname, "..", "install.sh");
@@ -70,12 +71,14 @@ test("an update goes to the newest release, by version number, not to main", () 
   const done = updateCode(root);
   assert.deepEqual(done, { changed: true, to: "v1.10.0" });
   assert.equal(at(root), versions["v1.10.0"]);
+  assert.equal(releaseOf(root), "v1.10.0");
 });
 
 test("with nothing newer it says so, and nothing has changed", () => {
   const root = copy("--branch", "v1.10.0", PUBLISHED);
   assert.deepEqual(updateCode(root), { changed: false, to: "v1.10.0" });
   assert.equal(at(root), versions["v1.10.0"]);
+  assert.equal(releaseOf(root), "v1.10.0");
 });
 
 test("an install made before releases leaves main for the newest release", () => {

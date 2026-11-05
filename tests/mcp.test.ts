@@ -1,5 +1,6 @@
 // Failure modes: stdout contains non-protocol text; unknown tools execute arbitrary endpoints; malformed arguments reach
-// the hub; an HTTP failure becomes a successful tool result; notifications get responses; source keys act as owner keys.
+// the hub; an HTTP failure becomes a successful tool result; notifications get responses; source keys act as owner keys;
+// a client is told a version number left behind by a release.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -7,6 +8,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createServer } from "node:http";
+import { versionName } from "../host/version.ts";
 import { setup } from "./helpers.ts";
 const home = setup("mcp");
 test("MCP stdio initializes and exposes only the typed hub operations", async () => {
@@ -58,6 +60,11 @@ test("MCP stdio initializes and exposes only the typed hub operations", async ()
     .split("\n")
     .map((l) => JSON.parse(l));
   assert.equal(responses.length, 7);
+  assert.equal(
+    responses[0].result.serverInfo.version,
+    versionName(),
+    "it says which version it is, not a number left behind",
+  );
   const get = (id: number) => responses.find((r) => r.id === id);
   assert.equal(get(1).result.protocolVersion, "2025-11-25");
   assert.ok(get(2).result.tools.some((t: any) => t.name === "answer"));

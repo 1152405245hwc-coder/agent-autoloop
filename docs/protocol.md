@@ -233,7 +233,7 @@ POST /v1/runs/12/cancel     {}
 
 `/v1/state` 的 `spending.today`、`spending.week` 独立于分页，按规则时区的今天和过去 7 × 24 小时的完成时间汇总。每项含 `rounds`、`tokens`、`cost`、`missingTokens`、`missingCost`，后两项是没报对应用量的轮数；从未开始就取消的轮次不计入。旧请求和响应字段保持不变，旧客户端可以忽略新增字段；新版 `status` 需要中台一起更新，不再逐页读取历史来算费用。
 
-安装与卸载不改变 HTTP 协议。`agent-autoloop --version` 显示包版本与提交；`agent-autoloop uninstall` 确认后移除自身程序、链接和服务，始终保留规则、密钥和记录；`--yes` 只跳过确认。
+安装与卸载不改变 HTTP 协议。`agent-autoloop --version` 显示版本与提交；`agent-autoloop uninstall` 确认后移除自身程序、链接和服务，始终保留规则、密钥和记录；`--yes` 只跳过确认。
 
 ## 失败时会怎样
 
@@ -411,3 +411,28 @@ Apple M5 Pro、24 GB、Node 24.21.0，用 `node scripts/history.ts 1000 10000 10
 Ship 使用本引擎仓库的 `plugins/delivery/action.yml`，项目固定到发布后的完整提交。Action 只输出 `release` 和 `superseded`，项目已有发布步骤根据输出运行。它与交付进程共用 `project.ts` 的范围与健康判断，不在项目里长期复制工具。
 
 普通健康 URL 只允许 HTTPS。测试时必须显式传 `--test-local-health`，Action 同样要 `test-local-health: 'true'`，才接受 `http://127.0.0.1`；不接受其他 HTTP 地址。GitHub 合并规则由项目维护者设置。
+
+## 版本与兼容
+
+版本号只写在 tag 上（`v1.2.3`），不进任何文件。`agent-autoloop --version` 读当前提交上的 tag，不在发布的提交上就显示“未发布”。
+
+| 这一版里影响最大的改动 | 版本号怎么变 |
+|---|---|
+| 只修问题 | 第三位加一：1.1.1 → 1.1.2 |
+| 加新能力或改默认行为，老用法照样能跑 | 第二位加一：1.1.1 → 1.2.0 |
+| 老用法不改就跑不了 | 第一位加一：1.1.1 → 2.0.0 |
+
+老用法指这些：
+
+- `/v1` 接口的路径、字段含义和鉴权；
+- 插件约定（`plugins/<名字>/{agent,channel,source}.ts`）；
+- `rules.json`；
+- 文档写了的命令和参数；
+- 交付约定（`ops/delivery.json`、四个标签、`delivery` 状态）；
+- 旧版本留下的数据，新版本能接着用。
+
+内部代码、文档没写的字段和提示文字不算。新增字段不算破坏，所以插件和客户端要忽略不认识的字段。要去掉一个东西，先标记废弃并发一个第二位版本，到下一个第一位版本才真删。
+
+`/v1` 单独算：只有 HTTP 接口不兼容时才变，软件到 2.0 不等于协议到 `/v2`。发出去的版本不再改，有问题就发下一个号。
+
+一批改动做完当天发；崩溃、丢数据、安全问题、装不上的修复当天发；其余的每周二发。只改文档、测试、CI 的不发。大改动可以先发试用版（`v1.2.0-rc.1`），安装和 `update` 不会装到它。
