@@ -31,8 +31,9 @@ const HELP = `Agent 自动化中台
   agent-autoloop resolve <卡片> <结果>   这件事不用决定了，写一句结果
   agent-autoloop doctor                  查哪里没配好
   agent-autoloop check                   检查 rules.json
-  agent-autoloop emit <类型> [--subject x] [--summary x] [--detail x] [--link x] [--id x] [--key 来源密钥]
-                                    发一条事件
+  agent-autoloop rules explain           按本机 rules.json 说明生效的规则、Agent、通道和下次定时
+  agent-autoloop emit <类型> [--dry-run] [--subject x] [--summary x] [--detail x] [--link x] [--id x] [--key 来源密钥]
+                                    发一条事件；--dry-run 只预演会派给谁，不连接中台
   agent-autoloop tell <编号> [--task 定时任务名]
                                     直接告诉你一件事，内容从标准输入读
   agent-autoloop stop <第几轮>           停掉一轮
@@ -497,17 +498,34 @@ async function key(args: string[]) {
 async function emit(args: string[]) {
   const { named, rest } = flags(args);
   const config = readConfig();
-  const type = rest[0] ?? fail("用法：agent-autoloop emit <类型>");
-  const secret = text(named.key) ?? config.source?.key ?? fail("这台电脑上没有来源的密钥：用 --key");
-  const answer = await client(secret, config).event({
+  const type = rest[0] ?? fail("用法：agent-autoloop emit <类型> [--dry-run]");
+  const event = {
     id: text(named.id) ?? randomUUID(),
     type,
     ...(text(named.subject) && { subject: text(named.subject) }),
     ...(text(named.summary) && { summary: text(named.summary) }),
     ...(text(named.detail) && { detail: text(named.detail) }),
     ...(text(named.link) && { link: text(named.link) }),
-  });
+  };
+  if (named["dry-run"] !== undefined) {
+    // The hub tells a source by its key, and only the key's own source is known here.
+    if (text(named.key)) return fail("--dry-run 按这台电脑的来源预演，不能和 --key 一起用");
+    if (!config.source) return fail("这台电脑上没有来源的密钥：--dry-run 需要知道来源名");
+    const { previewEvent } = await import("./explain.ts");
+    console.log("预演（按本机 rules.json，不连接中台、不写日志）：");
+    for (const line of previewEvent(readFileSync(RULES_FILE, "utf8"), config.source.name, event)) console.log(line);
+    return;
+  }
+  const secret = text(named.key) ?? config.source?.key ?? fail("这台电脑上没有来源的密钥：用 --key");
+  const answer = await client(secret, config).event(event);
   console.log(answer.routed.length ? `交给了：${answer.routed.join("、")}` : "记下了，没有规则接它。");
+}
+
+async function rulesCommand(args: string[]) {
+  const { rest } = flagsOf(args, [], "用法：agent-autoloop rules explain");
+  if (rest[0] !== "explain" || rest.length > 1) return fail("用法：agent-autoloop rules explain");
+  const { explainRules } = await import("./explain.ts");
+  for (const line of explainRules(readFileSync(RULES_FILE, "utf8"), Date.now())) console.log(line);
 }
 
 async function tell(args: string[]) {
@@ -600,6 +618,7 @@ const commands: Record<string, () => unknown> = {
   resolve: () => resolve(args),
   doctor,
   check,
+  rules: () => rulesCommand(args),
   key: () => key(args),
   emit: () => emit(args),
   tell: () => tell(args),
