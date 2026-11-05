@@ -78,8 +78,6 @@ function callTool(hub: Hub, name: Tool["name"], args: any) {
 export async function mcp() {
   const config = readConfig();
   const tools = toolsFor(config);
-  let initialized = false;
-  let ready = false;
   const reply = (id: unknown, body: object) => console.log(JSON.stringify({ jsonrpc: "2.0", id, ...body }));
   const refuse = (id: unknown, code: number, message: string) => reply(id, { error: { code, message } });
 
@@ -107,17 +105,11 @@ export async function mcp() {
       return refuse(request?.id ?? null, -32600, "请求格式不正确");
     }
     const { id, method, params } = request;
-    if (id === undefined) {
-      if (method === "notifications/initialized" && initialized) ready = true;
-    } else if (method === "initialize") {
-      if (!params?.protocolVersion || !params?.capabilities || !params?.clientInfo) {
-        return refuse(id, -32602, "缺少初始化参数");
-      }
-      initialized = true;
+    if (id === undefined) return;
+    if (method === "initialize") {
       const serverInfo = { name: "agent-autoloop", version: versionName() };
       reply(id, { result: { protocolVersion: "2025-11-25", capabilities: { tools: {} }, serverInfo } });
     } else if (method === "ping") reply(id, { result: {} });
-    else if (!ready) refuse(id, -32600, "先完成 initialize");
     else if (method === "tools/list") reply(id, { result: { tools } });
     // Each answers by itself, however long it takes: a client's ping has to get through meanwhile.
     else if (method === "tools/call") void answerCall(id, params);

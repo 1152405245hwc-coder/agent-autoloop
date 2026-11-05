@@ -8,13 +8,12 @@
 // before main moved decide what a round against the newer main does, so a health check added there is skipped; another event
 // on a commit with findings reviews it again, and a review that misses them this time merges it; findings leave an earlier
 // attestation of the commit standing; a merged PR without the label is followed and written to, so a later failed release turns
-// a completed delivery into a failure; findings on a PR someone merged during review report it as not merged, and its release
-// is not followed; right after ready the newest run is still a draft one and stands for the full check; a matrix job never
+// a completed delivery into a failure; a PR someone merged during review doesn't have its release
+// followed; right after ready the newest run is still a draft one and stands for the full check; a matrix job never
 // matches the required name, so a passed check waits forever; a PR retargeted during checks is merged into the other branch; a
 // delivery withdrawn during checks leaves its status pending for good; a status write failing right after findings closes the
 // commit to further reviews with nobody told what they found; labels that only partly come off leave a merged PR stuck as failed
-// with no marker for the retry to go by, or leave a review-only PR looking like a full delivery that the retry then merges; a
-// release failing after a PR was merged during review loses what the review found, since the retry doesn't review.
+// with no marker for the retry to go by, or leave a review-only PR looking like a full delivery that the retry then merges.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { deliver, fullCheck, waitLive, disableAuto, type DeliveryIO } from "../plugins/delivery/delivery.ts";
@@ -474,7 +473,7 @@ test("a different client merging during checks is followed without a second merg
   assert.equal((await deliver("example/app", 1, io)).merged, "merged");
   assert.equal(state.merges, 0);
 });
-test("a PR merged during review goes on to Ship and keeps what the review found", async () => {
+test("a PR merged during review goes on to Ship", async () => {
   for (const pushed of ["head", "pushed-then-merged"]) {
     const { io, state } = fixture();
     io.review = async () => {
@@ -484,57 +483,9 @@ test("a PR merged during review goes on to Ship and keeps what the review found"
     };
     const result = await deliver("example/app", 1, io);
     assert.equal(result.merged, "merged");
-    assert.deepEqual(result.findings, problem);
-    assert.equal(result.head, "head");
     assert.equal(state.merges, 0);
     assert.equal(latest(state, "delivery").state, "success");
     assert.ok(!state.statuses.some((s: any) => s.state === "failure"));
-  }
-});
-test("whatever stops a PR merged during review, the failure carries what the review found", async () => {
-  const ways: [RegExp, (io: DeliveryIO, api: DeliveryIO["api"]) => void][] = [
-    [
-      /发布没有通过/,
-      (io, api) => {
-        io.api = async (path, body, method) =>
-          path.startsWith("actions/workflows/ship.yml")
-            ? { workflow_runs: [run(1, "merged", "completed", "failure")] }
-            : api(path, body, method);
-      },
-    ],
-    [
-      /still waiting/,
-      (io) => {
-        io.live = async () => null;
-      },
-    ],
-    [
-      /permission denied/,
-      (io, api) => {
-        io.api = async (path, body, method) => {
-          if (path === "issues/1/labels/deliver") throw new Error("permission denied");
-          return api(path, body, method);
-        };
-      },
-    ],
-  ];
-  for (const [why, stop] of ways) {
-    const { io, state } = fixture();
-    io.review = async () => {
-      Object.assign(state.pr, { state: "closed", merged_at: "other", merge_commit_sha: "merged" });
-      return problem;
-    };
-    stop(io, io.api);
-    await assert.rejects(
-      () => deliver("example/app", 1, io),
-      (error: any) => {
-        assert.match(error.message, why);
-        assert.deepEqual(error.findings, problem);
-        assert.equal(error.merged, "merged");
-        assert.equal(error.head, "head");
-        return true;
-      },
-    );
   }
 });
 test("a merged PR resumes directly at Ship without reviewing or merging again", async () => {

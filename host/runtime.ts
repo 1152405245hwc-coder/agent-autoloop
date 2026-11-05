@@ -1,7 +1,7 @@
 // The hub on this machine: its database, the view kept from the log, the rules file, and one way to apply an input.
 // Importing this opens them all, which is why the checks that must survive a bad rules file import it late.
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { HOME, RULES_FILE } from "./home.ts";
@@ -38,9 +38,6 @@ export const environment = {
 
 export const db = new DatabaseSync(join(HOME, "hub.db"));
 db.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;");
-if (db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='events'").get()) {
-  throw new Error("这是旧版数据库；本轮未提供导入工具，请使用新的 AGENT_AUTOLOOP_HOME");
-}
 db.exec(`
   CREATE TABLE IF NOT EXISTS facts(seq INTEGER PRIMARY KEY, fact TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS projections(collection TEXT, key TEXT, data TEXT NOT NULL, PRIMARY KEY(collection, key));
@@ -120,33 +117,23 @@ export const parseRules = (json: string, now = Date.now()) =>
   checkRules(json, now, Intl.DateTimeFormat().resolvedOptions().timeZone);
 export { RulesError };
 export let rules = query.configuration(current);
-let loaded = { file: "", mtime: 0 };
 
-export function reloadRules(file = RULES_FILE) {
-  let mtime: number;
+export function reloadRules(file = RULES_FILE): { problem?: string } {
   let text: string;
   try {
-    mtime = statSync(file).mtimeMs;
-    if (loaded.file === file && loaded.mtime === mtime) return { changed: false };
     text = readFileSync(file, "utf8");
   } catch (error) {
-    // A file moved back keeps its old mtime and must still be read again.
-    loaded = { file: "", mtime: 0 };
-    return { changed: false, problem: unreadable(file, error as NodeJS.ErrnoException) };
+    return { problem: unreadable(file, error as NodeJS.ErrnoException) };
   }
-  // Only a read that took effect is remembered. Whatever stopped this one has to be found again: at startup there's nobody
-  // to tell yet, and a database that's busy can take neither the new rules nor the news about bad ones.
-  loaded = { file: "", mtime: 0 };
   try {
     const next = parseRules(text);
     const differs = JSON.stringify(next) !== JSON.stringify(query.configuration(getView()));
     const reportedBroken = (card: Row) => card.key.startsWith("rules:") && card.state === "open";
     if (differs || rows(current, "cards", { state: "open" }).some(reportedBroken)) execute("rules", [next]);
     rules = next;
-    loaded = { file, mtime };
-    return { changed: true };
+    return {};
   } catch (error) {
-    if (error instanceof RulesError) return { changed: false, problem: error.message };
+    if (error instanceof RulesError) return { problem: error.message };
     throw error;
   }
 }

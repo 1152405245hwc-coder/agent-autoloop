@@ -1,8 +1,7 @@
 // Failure modes: an owner question with backticks in its title or text cuts the receipt short; a short commit from the health
 // check can't be fetched, so every change needs a release and a docs-only PR never finishes; a failure on an ordinary issue is
 // covered up by the 404 from looking it up as a PR; one item whose label record can't be read fails the whole poll; a failed
-// round writes its error over the delivery status, so the next one forgets the commit had findings and reviews it again; a
-// release failing after a PR was merged during review loses what the review found, as the next round doesn't review.
+// round writes its error over the delivery status, so the next one forgets the commit had findings and reviews it again.
 // Nothing here reaches GitHub: `gh` is a stand-in first on PATH, and the Git remote is a local folder.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -13,7 +12,7 @@ import { after, test } from "node:test";
 import { createIO } from "../plugins/delivery/github.ts";
 import { poll } from "../plugins/delivery/poll.ts";
 import { run } from "../plugins/delivery/run.ts";
-import { readMessage, resultFrom } from "../worker/contract.ts";
+import { readMessage } from "../worker/contract.ts";
 
 const root = mkdtempSync(join(tmpdir(), "agent-autoloop-delivery-run-"));
 after(() => rmSync(root, { recursive: true, force: true }));
@@ -175,13 +174,12 @@ writeFileSync(
   `import fs from "node:fs";
 for await (const _ of process.stdin);
 fs.appendFileSync(${JSON.stringify(reviews)}, "x");
-const { findings, next } = JSON.parse(fs.readFileSync(${JSON.stringify(plan)}, "utf8"));
-if (next) fs.writeFileSync(${JSON.stringify(routes)}, JSON.stringify(next));
+const { findings } = JSON.parse(fs.readFileSync(${JSON.stringify(plan)}, "utf8"));
 console.log(JSON.stringify({ findings }));
 `,
 );
-/** What the stand-in reviewer finds, and what the stand-in `gh` answers once it has looked. */
-const reviewFinds = (findings: object[], next?: object) => writeFileSync(plan, JSON.stringify({ findings, next }));
+/** What the stand-in reviewer finds. */
+const reviewFinds = (findings: object[]) => writeFileSync(plan, JSON.stringify({ findings }));
 const timesReviewed = () => readFileSync(reviews, "utf8").length;
 const lastStatus = (context: string) =>
   readFileSync(statuses, "utf8")
@@ -254,31 +252,7 @@ const failedShip = {
     workflow_runs: [{ id: 1, head_sha: code, event: "push", status: "completed", conclusion: "failure" }],
   },
 };
-test("a release failing after a PR was merged during review still hands on the findings", async () => {
-  startOver();
-  reviewFinds(dataLoss, failedShip);
-  answers(delivering(openPr));
-  const { result, problem } = resultFrom(readMessage(await run("example/app", about(8), true)), {});
-  assert.equal(problem, undefined);
-  assert.equal(result.outcome, "failed");
-  assert.match(result.error!, /发布没有通过/);
-  const [card] = result.notice!;
-  assert.match(card.title, /已合并/);
-  assert.match(card.text, /数据会丢/);
-  assert.equal(lastStatus("delivery").state, "failure");
-  // The next round doesn't review, so it has nothing to say twice.
-  await assert.rejects(() => run("example/app", about(8), true), /发布没有通过/);
-  assert.equal(timesReviewed(), 1);
-});
-test("GitHub failing while that failure is written down does not lose the findings either", async () => {
-  startOver();
-  reviewFinds(dataLoss, { ...failedShip, [`repos/example/app/statuses/${code}`]: { fail: "HTTP 502" } });
-  answers(delivering(openPr));
-  const { result } = resultFrom(readMessage(await run("example/app", about(8), true)), {});
-  assert.equal(result.outcome, "failed");
-  assert.match(result.notice![0].text, /数据会丢/);
-});
-test("a failed release with nothing found stays a plain failure", async () => {
+test("a failed release is a plain failure", async () => {
   startOver();
   answers(failedShip);
   await assert.rejects(() => run("example/app", about(8), true), /发布没有通过/);

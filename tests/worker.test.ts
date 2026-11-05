@@ -18,18 +18,14 @@
 // A plugin that can't read what it printed, or gives back nothing, ends the worker, holds the run for ever, counts a run still
 // going as ended, or starts its prompt again in a new session, whether the run ended or vanished; or hands in a session made
 // up here in place of the one it read while the run was going, which a retry can't go on in; trouble with one run, like a
-// folder it can't write to, holds up the others, ends the worker or fills the log; a worker started again after trouble
-// needs the folder it lost. Over ACP, a retry in a session a turn already started in that breaks before the prompt redoes the
-// work in a new one, or does so because something else has the session open just now, and one the agent refuses or can't go
-// on in doesn't get a new one; a "没跑成" after a finished tool call
-// is run together with what came before it and counts as work done; a failed turn whose agent won't go, or leaves something
-// holding its output, or closes its output and stays, holds its place until the time limit and loses the real reason. An
-// agent that crashes or vanishes leaves what it was running going while its result goes in, so a retry runs alongside it;
-// clearing that up loses the session or the reason, or forgets where it had got to over a restart. A run's number that has
-// since gone to someone else's program, after a reboot or with the worker down a long while, gets their process group
-// stopped or killed, whichever way the run had ended.
+// folder it can't write to, holds up the others, ends the worker or fills the log. Over ACP, a retry in a session a turn
+// already started in that breaks before the prompt redoes the work in a new one, or does so because something else has the
+// session open just now, and one the agent refuses or can't go on in doesn't get a new one; a "没跑成" after a finished tool
+// call is run together with what came before it and counts as work done; a failed turn whose agent won't go, or leaves
+// something holding its output, or closes its output and stays, holds its place until the time limit and loses the real
+// reason.
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -900,13 +896,6 @@ test("a plugin that gives back nothing fails that run and doesn't hold it", asyn
   assert.match(hub.results[0].error, /读不懂/);
 });
 
-test("a worker started again brings back a folder that's gone", async () => {
-  const w = worker(fakeHub());
-  rmSync(join(home, "worker", "runs"), { recursive: true, force: true });
-  await w.run(AbortSignal.abort());
-  assert.deepEqual(w.entries(), []);
-});
-
 test("trouble with one run waits for the next round and holds up no other", async () => {
   const hub = fakeHub();
   const lines: string[] = [];
@@ -1077,158 +1066,5 @@ for (const [what, script, why] of [
     assert.match(hub.results[0].error, why);
     assert.equal(hub.results[0].session, "agent-session");
     assert.equal(groupGoing(pid), false, "and nothing of it is left");
-  });
-}
-
-/** A run of its own in hand, and whether its process group was still going when its result went in. */
-async function launched(hub: ReturnType<typeof fakeHub>, given: ReturnType<typeof job>, more: object = {}) {
-  hub.jobs.push(given);
-  const w = worker(hub, more);
-  await w.tick();
-  const pid = w.entries()[0].pid!;
-  const seen: { goingAtHandIn?: boolean } = {};
-  const handIn = hub.result;
-  hub.result = async (...args: [number, string, any]) => {
-    seen.goingAtHandIn = groupGoing(pid);
-    return handIn(...args);
-  };
-  return { w, pid, seen };
-}
-
-/**
- * A step that starts something in the same process group and leaves it going until the gate opens. It goes on only once
- * that's under way: a stop that came sooner could miss a stubborn one's `trap`, and that would be a different test.
- */
-function leftBehind(name: string, stubborn = false) {
-  const { hold, open } = gate(name);
-  const ready = join(folder, `${name}.ready`);
-  const finished = join(folder, `${name}.finished`);
-  const ignoring = stubborn ? "trap '' TERM; " : "";
-  const step = `(${ignoring}touch "${ready}"; ${hold}; touch "${finished}") & until [ -e "${ready}" ]; do sleep 0.02; done;`;
-  return { step, open, finished };
-}
-
-test("an agent that crashes has what it left behind stopped before its result goes in", async () => {
-  const hub = fakeHub();
-  const script = `printf 'session=s-c\\nTURN-BEGAN\\n'; ${leftBehind("crash").step} echo 崩了 >&2; exit 3`;
-  const { w, seen } = await launched(hub, job({ use: "scripted", session: "s-c", command: [script] }));
-  await until(w, () => hub.results.length === 1);
-  assert.equal(seen.goingAtHandIn, false, "stopped first");
-  assert.deepEqual(
-    [hub.results[0].outcome, hub.results[0].error, hub.results[0].session],
-    ["failed", "崩了", "s-c"],
-    "and what comes back is what would have without it",
-  );
-});
-
-test("what a crash left behind that ignores the stop is killed after a while, across a worker restart", async () => {
-  const hub = fakeHub();
-  let clock = Date.now();
-  const script = `printf 'session=s-s\\nTURN-BEGAN\\n'; ${leftBehind("crash-stubborn", true).step} echo 崩了 >&2; exit 3`;
-  const now = () => clock;
-  const { w, seen } = await launched(hub, job({ use: "scripted", command: [script] }), { now });
-  await until(w, () => w.entries()[0]?.stopping !== undefined);
-  await w.tick();
-  assert.equal(hub.results.length, 0, "it's still going");
-  const again = worker(hub, { now });
-  await again.tick();
-  assert.equal(hub.results.length, 0, "a new worker carries on waiting");
-  clock += 11_000;
-  await until(again, () => hub.results.length === 1);
-  assert.equal(seen.goingAtHandIn, false);
-  assert.deepEqual([hub.results[0].outcome, hub.results[0].error], ["failed", "崩了"]);
-});
-
-test("a session that can't be gone on in has what the failed try left behind stopped before a new one starts", async () => {
-  const hub = fakeHub();
-  const script = `if [ -n "$1" ]; then ${leftBehind("crash-fresh").step} echo 接不上 >&2; exit 1; fi; printf 'session=new\\n开了新会话\\n'`;
-  const { w, seen } = await launched(hub, job({ use: "scripted", session: "old", command: [script] }));
-  await until(w, () => hub.results.length === 1);
-  assert.equal(seen.goingAtHandIn, false);
-  assert.deepEqual([hub.results[0].outcome, hub.results[0].session], ["done", "new"]);
-});
-
-test("a plain command that crashes is cleared up too, and says the same as ever", async () => {
-  const hub = fakeHub();
-  const given = job({ command: ["/bin/sh", "-c", `${leftBehind("crash-command").step} echo boom >&2; exit 3`] });
-  const { w, seen } = await launched(hub, given);
-  await until(w, () => hub.results.length === 1);
-  assert.equal(seen.goingAtHandIn, false);
-  assert.match(hub.results[0].error, /退出码 3：boom/);
-});
-
-test("a run whose wrapper vanished without an exit has the rest of its group stopped before its result goes in", async () => {
-  const hub = fakeHub();
-  const { hold } = gate("wrapper-gone");
-  const going = join(folder, "wrapper-gone-going");
-  const script = `printf 'session=s-v\\nTURN-BEGAN\\n'; touch "${going}"; ${hold}`;
-  const { w, pid, seen } = await launched(hub, job({ use: "scripted", session: "s-v", command: [script] }));
-  await until(w, () => existsSync(going));
-  process.kill(pid, "SIGKILL");
-  await until(w, () => hub.results.length === 1);
-  assert.equal(seen.goingAtHandIn, false);
-  assert.deepEqual(
-    [hub.results[0].outcome, hub.results[0].error, hub.results[0].session],
-    ["failed", "没留下结果", "s-v"],
-  );
-});
-
-test("an agent that exits cleanly keeps what it left running, as it always has", async () => {
-  const hub = fakeHub();
-  const left = leftBehind("clean-exit");
-  const script = `printf 'session=s-e\\n'; ${left.step} printf '做完了\\n'`;
-  const { w, seen } = await launched(hub, job({ use: "scripted", command: [script] }));
-  await until(w, () => hub.results.length === 1);
-  assert.equal(seen.goingAtHandIn, true, "not held back");
-  assert.deepEqual([hub.results[0].outcome, hub.results[0].summary], ["done", "做完了"]);
-  left.open();
-  const end = Date.now() + 15_000;
-  while (!existsSync(left.finished)) {
-    if (Date.now() > end) assert.fail("it was stopped");
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-});
-
-test("over ACP, an agent that crashes while its tool runs has the tool stopped before its result goes in", async () => {
-  const hub = fakeHub();
-  const agent = acp(
-    "crash-in-a-tool",
-    `on['session/prompt'] = () => { spawn('sleep', ['30'], { stdio: 'ignore' }); console.error('工具跑到一半崩了'); process.exit(9); };`,
-  );
-  const { w, seen } = await launched(hub, job({ use: "acp", command: agent.command }));
-  await until(w, () => hub.results.length === 1);
-  assert.equal(seen.goingAtHandIn, false);
-  assert.equal(hub.results[0].outcome, "failed");
-  assert.match(hub.results[0].error, /工具跑到一半崩了/);
-  assert.equal(hub.results[0].session, "agent-session");
-});
-
-for (const [what, fields, exit, expected] of [
-  ["after a reboot, with no exit", {}, undefined, "failed"],
-  ["after the worker was down, with a failed exit", {}, 1, "failed"],
-  ["with a stop under way when the worker went", { stopping: 1, why: "cancel" }, undefined, "cancelled"],
-] as const) {
-  test(`a run's number that's now someone else's leaves them alone: ${what}`, async () => {
-    const other = spawn("/bin/sh", ["-c", "exec sleep 120"], { detached: true, stdio: "ignore" });
-    other.unref();
-    let stopped = false;
-    other.on("exit", () => (stopped = true));
-    const hub = fakeHub();
-    const given = job();
-    // As a worker finds it on coming back: a run it had going, with the number that's since gone to that program.
-    const dir = join(home, "worker", "runs", `${given.run}-1`);
-    mkdirSync(dir, { recursive: true });
-    const entry = { run: given.run, token: given.token, attempt: 1, job: given, dir, prompt: "p", turn: 1 };
-    const rest = { session: "s", resume: null, repairs: 0, triedFresh: false, pid: other.pid };
-    writeFileSync(join(dir, "entry.json"), JSON.stringify({ ...entry, ...rest, ...fields }));
-    if (exit !== undefined) writeFileSync(join(dir, "exit-1"), `${exit}\n`);
-    try {
-      await until(worker(hub), () => hub.results.length === 1);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      assert.equal(stopped, false, "it was never part of the run");
-      assert.equal(hub.results[0].outcome, expected);
-    } finally {
-      other.kill("SIGKILL");
-    }
   });
 }

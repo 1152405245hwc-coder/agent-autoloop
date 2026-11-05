@@ -144,7 +144,6 @@ export async function deliver(
       return { summary: "这个提交审查发现过问题，修复后推新提交才会重审" };
   }
   await status(io, head, "delivery", "pending", "正在审查、检查和核实发布");
-  let tooLate: Finding[] = [];
   // Sync inside the run: a thrown sync waits out the hub's growing retry backoff while main keeps moving.
   for (let round = 1; !pr.merged_at; round++) {
     let base = (await io.api("git/ref/heads/main")).object.sha;
@@ -165,10 +164,8 @@ export async function deliver(
     config = await settingsAt(base);
     const findings = await io.review(pr, config, base);
     const current = await io.api(`pulls/${number}`);
-    // Someone merged it meanwhile: too late to hold it back, not too late to say what the review found.
     if (current.merged_at) {
       pr = current;
-      tooLate = findings;
       break;
     }
     if (current.head.sha !== head) throw new Error("审查期间提交变了，等待重新交付");
@@ -217,14 +214,9 @@ export async function deliver(
       if (!pr.merged_at) throw new Error("尚未确认合并，稍后继续核实");
     }
   }
-  try {
-    await waitLive(pr.merge_commit_sha, config, io);
-    const summary = config.health ? "已合并、发布成功，健康版本已核实" : "已合并；项目没有线上服务";
-    await status(io, pr.head.sha, "delivery", "success", summary);
-    await clearLabels(number, pr, io);
-    return { summary, merged: pr.merge_commit_sha, findings: tooLate, head };
-  } catch (error) {
-    // The next round finds the PR merged and doesn't review, so what this one found has to leave with this failure.
-    throw Object.assign(error as Error, { merged: pr.merge_commit_sha, findings: tooLate, head });
-  }
+  await waitLive(pr.merge_commit_sha, config, io);
+  const summary = config.health ? "已合并、发布成功，健康版本已核实" : "已合并；项目没有线上服务";
+  await status(io, pr.head.sha, "delivery", "success", summary);
+  await clearLabels(number, pr, io);
+  return { summary, merged: pr.merge_commit_sha };
 }

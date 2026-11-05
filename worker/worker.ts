@@ -26,7 +26,7 @@ import type { Job } from "../protocol/job.ts";
 import { addUsage, type Notice, type Result } from "../protocol/validate.ts";
 import { adapterFor, type Adapter, type Reading, type Turn, type Usage } from "./agents.ts";
 import { promptFor, readMessage, repairPrompt, resultFrom } from "./contract.ts";
-import { forgetOldUsage, loadUsage, saveUsage, usageDelta } from "./usage.ts";
+import { loadUsage, saveUsage, usageDelta } from "./usage.ts";
 
 const RUNS = path.join(HOME, "worker", "runs");
 const NOTHING: Usage = { input: 0, output: 0, cached: 0, cost: 0 };
@@ -66,7 +66,7 @@ type Entry = {
   finishedAt?: number;
   told?: string;
   stopping?: number;
-  why?: "cancel" | "timeout" | "finished" | "exited";
+  why?: "cancel" | "timeout" | "finished";
   result?: Result;
 };
 export type WorkerHub = Pick<Hub, "work" | "started" | "result">;
@@ -141,13 +141,6 @@ function signal(entry: Entry, name: NodeJS.Signals) {
 
 /** Whether anything in the run's group is still going, null when we could not look. */
 function groupAlive(entry: Entry): boolean | null {
-  if (!entry.pid) return false;
-  // Its number can have gone to another program since, as after a reboot. A number isn't given out while a group of that
-  // number is left, so nothing of this run's remains, and whatever has that group now isn't this run's to stop.
-  try {
-    const seen = execFileSync("ps", ["-p", String(entry.pid), "-o", "stat=", "-o", "command="], { encoding: "utf8" });
-    if (seen.trim() && !seen.trim().startsWith("Z") && !seen.includes(marker(entry))) return false;
-  } catch {}
   // The wrapper can die before a child; zombies have already stopped and only their parent can reap them.
   try {
     return execFileSync("ps", ["-ax", "-o", "pgid=", "-o", "stat="], { encoding: "utf8" })
@@ -416,16 +409,10 @@ export function createWorker({
       }
       return conclude(entry, adapter, exitCode());
     }
-    const ended = () => {
-      const code = exitCode();
-      // What a crash left running would carry on alongside the retry. An agent that exited cleanly meant what it left.
-      if (code !== 0 && groupAlive(entry)) return stop(entry, "exited");
-      return conclude(entry, adapter, code);
-    };
-    if (existsSync(exit)) return ended();
+    if (existsSync(exit)) return conclude(entry, adapter, exitCode());
     // The shell can publish its exit between the first file check and ps returning.
     const looking = alive(entry);
-    if (looking === false) return ended();
+    if (looking === false) return conclude(entry, adapter, exitCode());
     // Unable to look, the run counts as still going, so its timeout and its finished turn still end it.
     if (looking === null && !blind) log(`couldn't run ps; runs count as going until they end or time out`);
     blind = looking === null;
@@ -566,17 +553,10 @@ export function createWorker({
         sayOnce(`couldn't clear ${dir}: ${error}`);
       }
     }
-    try {
-      forgetOldUsage(moment);
-    } catch (error) {
-      sayOnce(`couldn't clear old session totals: ${error}`);
-    }
   }
 
   async function run(signalled: AbortSignal) {
     log(`worker ${name} started`);
-    // Started again after trouble, it may be what went: nothing else would bring it back, and every round needs it.
-    mkdirSync(RUNS, { recursive: true, mode: 0o700 });
     while (!signalled.aborted) {
       if (!(await tick())) await new Promise((resolve) => setTimeout(resolve, PAUSE));
     }

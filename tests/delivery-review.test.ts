@@ -1,9 +1,7 @@
 // Failure modes: empty/failed reviews pass; findings are unhandled but attested; Codex reads developer
 // config or memories, writes files, sees credentials, or executes a PR's programs/settings. Review receives a text snapshot;
-// what an octopus merge brings or a file Git calls binary holds never reaches the reviewer, so it passes unseen; Git escapes a
-// Chinese path so it matches no pattern; a root file named like a commit is taken for one and the review can't finish; a big
-// binary fails the run for good with an unreadable error, even when the PR skips the model; a NUL left in the snapshot makes grep
-// treat the whole of it as binary.
+// what an octopus merge brings never reaches the reviewer, so it passes unseen; Git escapes a Chinese path so it matches no
+// pattern; a root file named like a commit is taken for one and the review can't finish.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseReview, codexCommand, reviewSnapshot } from "../plugins/delivery/review.ts";
@@ -143,14 +141,6 @@ test("an ordinary merge still goes to the reviewer", async () => {
   assert.deepEqual(await p.review(p.git("rev-parse", "HEAD")), []);
   assert.ok(p.reviewed());
 });
-test("a file with a NUL byte shows its text in the snapshot", async () => {
-  using p = project();
-  p.write("app.ts", "// \0\nexport const hidden = 'visible-to-review';\n");
-  assert.deepEqual(await p.review(p.commit()), []);
-  assert.ok(p.reviewed());
-  assert.match(p.changes(), /visible-to-review/);
-  assert.ok(!p.changes().includes("\0"));
-});
 test("a Chinese path still matches the settings", async () => {
   using p = project();
   p.write("docs/说明.md", "docs");
@@ -163,28 +153,4 @@ test("a root file named like a commit is reviewed as a file", async () => {
   assert.deepEqual(await p.review(p.commit()), []);
   assert.ok(p.reviewed());
   assert.match(p.changes(), /named like a commit/);
-});
-const OVER_THE_LIMIT = Buffer.alloc(33 * 1024 * 1024);
-test("a diff too big to read comes back as a readable finding, not a failed run", async () => {
-  using p = project();
-  writeFileSync(join(p.repo, "big.bin"), OVER_THE_LIMIT);
-  const findings = await p.review(p.commit());
-  assert.equal(findings.length, 1);
-  assert.match(findings[0].title, /太大/);
-  assert.match(findings[0].text, /二进制/);
-  assert.ok(!p.reviewed());
-});
-test("deleting it in a later commit does not help, as the finding says", async () => {
-  using p = project();
-  writeFileSync(join(p.repo, "big.bin"), OVER_THE_LIMIT);
-  p.commit();
-  rmSync(join(p.repo, "big.bin"));
-  const findings = await p.review(p.commit());
-  assert.match(findings[0].text, /删除不够/);
-});
-test("a document too big to read still skips the model, without a finding", async () => {
-  using p = project();
-  writeFileSync(join(p.repo, "docs/big.md"), OVER_THE_LIMIT);
-  assert.deepEqual(await p.review(p.commit()), []);
-  assert.ok(!p.reviewed());
 });

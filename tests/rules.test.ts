@@ -18,7 +18,7 @@ import { test } from "node:test";
 import { setup } from "./helpers.ts";
 
 const home = setup("rules");
-const { parseRules, RulesError, rules, ruleNamed, reloadRules } = await import("../host/runtime.ts");
+const { parseRules, RulesError, rules, ruleNamed, reloadRules, one } = await import("../host/runtime.ts");
 const { typeMatches } = await import("../kernel/rules.ts");
 
 const good = () => JSON.parse(readFileSync(join(import.meta.dirname, "rules.fixture.json"), "utf8"));
@@ -168,9 +168,7 @@ test("a null rule is a rules error and leaves the running configuration intact",
   const broken = good();
   broken.rules = [null];
   writeFileSync(file, JSON.stringify(broken));
-  const answer = reloadRules(file);
-  assert.equal(answer.changed, false);
-  assert.match(answer.problem!, /对象/);
+  assert.match(reloadRules(file).problem!, /对象/);
   assert.equal(ruleNamed("意见")!.to, "a1");
 });
 
@@ -186,22 +184,21 @@ test("a good file changing on disk takes effect; a bad one leaves the old rules 
   const changed = good();
   changed.rules[0].prompt = "新的说法。";
   writeFileSync(file, JSON.stringify(changed));
-  assert.deepEqual(reloadRules(file), { changed: true });
+  assert.equal(reloadRules(file).problem, undefined);
   assert.equal(ruleNamed("意见")!.prompt, "新的说法。");
-  assert.deepEqual(reloadRules(file), { changed: false }, "nothing new on disk");
+  const facts = () => one<{ count: number }>("SELECT COUNT(*) AS count FROM facts")!.count;
+  const before = facts();
+  assert.equal(reloadRules(file).problem, undefined);
+  assert.equal(facts(), before, "nothing new on disk, so nothing goes in the log");
   const broken = good();
   broken.rules[0].to = "nobody";
   writeFileSync(file, JSON.stringify(broken));
-  const answer = reloadRules(file);
-  assert.equal(answer.changed, false);
-  assert.match(answer.problem!, /nobody/);
+  assert.match(reloadRules(file).problem!, /nobody/);
   assert.equal(ruleNamed("意见")!.prompt, "新的说法。", "the old rules keep running");
 });
 
 test("a rules file that can't be read is a problem, not a crash, and the old rules keep running", () => {
-  const answer = reloadRules(join(home, "gone.json"));
-  assert.equal(answer.changed, false);
-  assert.match(answer.problem!, /找不到/);
+  assert.match(reloadRules(join(home, "gone.json")).problem!, /找不到/);
   assert.equal(ruleNamed("意见")!.prompt, "新的说法。");
   assert.match(reloadRules(home).problem!, /读不到/, "a folder where the file should be");
 });

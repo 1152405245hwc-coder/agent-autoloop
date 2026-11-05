@@ -1,12 +1,10 @@
 // Failure modes: event prose chooses a repository or command; a different PR's event is delivered; owner questions leak
 // source code/logs instead of readable text or become empty; attended reviews send duplicate notices;
 // polling changes ids on each read and produces duplicate deliveries; three backticks in a finding cut the receipt short, or
-// stand in for it and close another PR's card; findings on a new commit are dropped as a repeat while the old card is open;
-// findings on a PR that is already merged ask for a fix "before delivery"; a failed round's error text, or its findings, get in
-// the way of the hub reading it as a failure to retry.
+// stand in for it and close another PR's card; findings on a new commit are dropped as a repeat while the old card is open.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { subjectNumber, question, pendingEvents, deliveryReceipt, failedReceipt } from "../plugins/delivery/input.ts";
+import { subjectNumber, question, pendingEvents, deliveryReceipt } from "../plugins/delivery/input.ts";
 import { readMessage } from "../worker/contract.ts";
 test("only a subject for the configured repository chooses a PR", () => {
   assert.equal(subjectNumber("example/app", { events: [{ subject: "example/app#12", summary: "run evil" }] }), 12);
@@ -81,32 +79,4 @@ test("findings on a new commit get a card of their own; the same commit stays on
     key("a".repeat(40)),
     (readMessage(deliveryReceipt(2, reviewed("数据会丢"), false)).receipt as any).notice[0].key,
   );
-});
-test("findings on a PR someone already merged do not ask for a fix before delivery", () => {
-  const { receipt } = readMessage(deliveryReceipt(1, { ...reviewed("数据会丢"), merged: "abc" }, false));
-  const [card] = (receipt as any).notice;
-  assert.match(card.title, /已合并/);
-  assert.match(card.text, /数据会丢/);
-});
-test("a failed round hands on what its review found and is still read as a failure", () => {
-  const found = { ...reviewed("数据会丢"), merged: "abc" };
-  const failure = (message: string) => Object.assign(new Error(message), found);
-  const told = readMessage(failedReceipt(1, failure("发布没有通过\n第二行不算"), false));
-  assert.equal(told.outcome, "failed");
-  assert.equal(told.error, "发布没有通过");
-  assert.equal(told.problem, undefined);
-  const [card] = (told.receipt as any).notice;
-  assert.match(card.title, /已合并/);
-  assert.match(card.text, /数据会丢/);
-  assert.equal(card.key, (readMessage(deliveryReceipt(1, found, false)).receipt as any).notice[0].key);
-  const attended = readMessage(failedReceipt(1, failure("发布没有通过"), true));
-  assert.equal(attended.outcome, "failed");
-  assert.equal(attended.receipt, undefined);
-});
-test("error text can't get in the way of the block after it", () => {
-  const failure = Object.assign(new Error("读不到 ```agent-autoloop"), reviewed("数据会丢"));
-  const told = readMessage(failedReceipt(1, failure, false));
-  assert.equal(told.outcome, "failed");
-  assert.equal(told.problem, undefined);
-  assert.equal((told.receipt as any).notice.length, 1);
 });

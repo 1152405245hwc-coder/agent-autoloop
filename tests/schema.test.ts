@@ -35,16 +35,6 @@ test("notice receipts accept an optional boolean fyi and keep all other boundari
   assert.ok(checkSchema("result", ask).length);
 });
 
-test("a receipt's key with half a character in it is refused: stored and looked up differently, it could never match", () => {
-  const key = "half-\ud83d-key";
-  const words = { title: "看一眼", text: "这个" };
-  assert.throws(() => parseResult({ outcome: "done", ask: [{ ...words, options: ["甲", "乙"], key }] }), /ask/);
-  assert.throws(() => parseResult({ outcome: "done", notice: [{ ...words, key }] }), /notice/);
-  assert.throws(() => parseResult({ outcome: "done", later: [{ key, cancel: true }] }), /later/);
-  const whole = { outcome: "done", notice: [{ ...words, key: "一条-😀" }] };
-  assert.deepEqual(parseResult(whole), whole);
-});
-
 test("wire schemas agree with event and receipt boundaries", () => {
   for (const input of [
     { id: "one", type: "app.changed" },

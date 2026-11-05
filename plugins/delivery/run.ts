@@ -3,8 +3,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createIO } from "./github.ts";
-import { deliver, disableAuto, status, type Delivered } from "./delivery.ts";
-import { deliveryReceipt, failedReceipt, question, receiptBlock, subjectNumber } from "./input.ts";
+import { deliver, disableAuto, status } from "./delivery.ts";
+import { deliveryReceipt, question, receiptBlock, subjectNumber } from "./input.ts";
 
 const hasLabel = (issue: any, name: string) => issue.labels.some((label: any) => label.name === name);
 
@@ -22,22 +22,13 @@ export async function run(repo: string, context: any, testLocalHealth = false) {
       }
       return `有一件事需要你处理\n${receiptBlock({ ask: [question(issue)] })}`;
     }
-    const attended = hasLabel(issue, "deliver-attended");
     try {
       const result = await deliver(repo, number, io, testLocalHealth);
-      return deliveryReceipt(number, result, attended);
+      return deliveryReceipt(number, result, hasLabel(issue, "deliver-attended"));
     } catch (error) {
-      const failure = error as Error & Partial<Delivered>;
-      const receipt = failure.findings?.length ? failedReceipt(number, failure, attended) : "";
-      try {
-        const pr = await io.api(`pulls/${number}`);
-        if (pr.auto_merge) await disableAuto(number, io);
-        await status(io, pr.head.sha, "delivery", "failure", failure.message);
-      } catch (other) {
-        // The next round won't review, so the findings go out whatever GitHub says now.
-        if (!receipt) throw other;
-      }
-      if (receipt) return receipt;
+      const pr = await io.api(`pulls/${number}`);
+      if (pr.auto_merge) await disableAuto(number, io);
+      await status(io, pr.head.sha, "delivery", "failure", (error as Error).message);
       throw error;
     }
   } finally {
