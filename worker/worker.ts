@@ -66,7 +66,7 @@ type Entry = {
   finishedAt?: number;
   told?: string;
   stopping?: number;
-  why?: "cancel" | "timeout" | "finished";
+  why?: "cancel" | "timeout" | "finished" | "exited";
   result?: Result;
 };
 export type WorkerHub = Pick<Hub, "work" | "started" | "result">;
@@ -141,6 +141,13 @@ function signal(entry: Entry, name: NodeJS.Signals) {
 
 /** Whether anything in the run's group is still going, null when we could not look. */
 function groupAlive(entry: Entry): boolean | null {
+  if (!entry.pid) return false;
+  // Its number can have gone to another program since, as after a reboot. A number isn't given out while a group of that
+  // number is left, so nothing of this run's remains, and whatever has that group now isn't this run's to stop.
+  try {
+    const seen = execFileSync("ps", ["-p", String(entry.pid), "-o", "stat=", "-o", "command="], { encoding: "utf8" });
+    if (seen.trim() && !seen.trim().startsWith("Z") && !seen.includes(marker(entry))) return false;
+  } catch {}
   // The wrapper can die before a child; zombies have already stopped and only their parent can reap them.
   try {
     return execFileSync("ps", ["-ax", "-o", "pgid=", "-o", "stat="], { encoding: "utf8" })
@@ -398,6 +405,7 @@ export function createWorker({
       }
     }
     const { exit } = files(entry);
+    const exitCode = () => (existsSync(exit) ? Number(readFileSync(exit, "utf8").trim()) : null);
     if (entry.stopping !== undefined) {
       const going = groupAlive(entry);
       if (going !== false) {
@@ -406,14 +414,18 @@ export function createWorker({
         // Unable to look, the kill is the last we can know of it; waiting to see it gone would hold the run forever.
         if (going || !overdue) return;
       }
-      return conclude(entry, adapter, existsSync(exit) ? Number(readFileSync(exit, "utf8").trim()) : null);
+      return conclude(entry, adapter, exitCode());
     }
-    if (existsSync(exit)) return conclude(entry, adapter, Number(readFileSync(exit, "utf8").trim()));
+    const ended = () => {
+      const code = exitCode();
+      // What a crash left running would carry on alongside the retry. An agent that exited cleanly meant what it left.
+      if (code !== 0 && groupAlive(entry)) return stop(entry, "exited");
+      return conclude(entry, adapter, code);
+    };
+    if (existsSync(exit)) return ended();
     // The shell can publish its exit between the first file check and ps returning.
     const looking = alive(entry);
-    if (looking === false) {
-      return conclude(entry, adapter, existsSync(exit) ? Number(readFileSync(exit, "utf8").trim()) : null);
-    }
+    if (looking === false) return ended();
     // Unable to look, the run counts as still going, so its timeout and its finished turn still end it.
     if (looking === null && !blind) log(`couldn't run ps; runs count as going until they end or time out`);
     blind = looking === null;
@@ -447,7 +459,7 @@ export function createWorker({
     }
   }
 
-  function stop(entry: Entry, why: "cancel" | "timeout" | "finished") {
+  function stop(entry: Entry, why: NonNullable<Entry["why"]>) {
     if (entry.stopping !== undefined || entry.result) return;
     entry.stopping = now();
     entry.why = why;

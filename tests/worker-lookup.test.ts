@@ -1,6 +1,7 @@
 // Failure modes: the worker cannot run ps at all (the sandbox forbids it, or it is missing or not executable), and it
 // reports a run that is still going as finished because the failed lookup was read as "the process is gone"; or, unable
-// to look, it holds a stuck or stopped run forever because its timeout and its stop wait on a sighting that never comes.
+// to look, it holds a stuck or stopped run forever because its timeout and its stop wait on a sighting that never comes;
+// or it holds back the result of a run that has ended, stopping a process group it can't see anything left in.
 import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -87,6 +88,32 @@ test("a run whose process is gone is reported as finished", async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
   assert.equal(results.length, 1, "the finished run was never reported");
+});
+
+test("a run that is gone with no exit, and a group that can't be looked at, is reported without waiting", async () => {
+  // Still really going, so there's no exit file whatever the machine's speed: only the lookup says it's gone.
+  psSaysGone();
+  const results: any[] = [];
+  const worker = workerThatReports(results, jobFor(16, 1));
+  for (let i = 0; i < 100 && !results.length; i++) {
+    await worker.tick();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.equal(results.length, 1, "it was held back");
+});
+
+test("a run that failed, and a group that can't be looked at, is reported without waiting", async () => {
+  psCannotRun();
+  const results: any[] = [];
+  const job = jobFor(17, 0);
+  job.agent.command = ["/bin/sh", "-c", "echo boom >&2; exit 3"];
+  const worker = workerThatReports(results, job);
+  for (let i = 0; i < 100 && !results.length; i++) {
+    await worker.tick();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.equal(results.length, 1, "it was held back");
+  assert.match(results[0].error, /退出码 3：boom/);
 });
 
 test("a run that cannot be looked up is not reported as finished", async () => {

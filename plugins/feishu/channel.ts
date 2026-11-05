@@ -4,8 +4,8 @@
 //   "channels": { "feishu": { "key": "…", "user": "ou_xxx" } } in config.json
 //   "channels": { "feishu": { "name": "飞书", "answerers": ["ou_xxx"] } } in rules.json: who may answer.
 import { execFile, spawn } from "node:child_process";
-import readline from "node:readline";
 import type { Card, ChannelContext } from "../../host/channels.ts";
+import { eachLine } from "../../host/lines.ts";
 
 /** Feishu sends these values as JSON in a string, which may be empty. */
 function safeJson(text: unknown): any {
@@ -189,10 +189,8 @@ export default async function feishu({ hub, options, log, signal }: ChannelConte
       consume.on("error", (error) => log(`the click listener couldn't run: ${error}`));
       const stop = () => consume.kill();
       signal.addEventListener("abort", stop);
-      readline.createInterface({ input: consume.stderr }).on("line", (line) => log(line));
-      readline
-        .createInterface({ input: consume.stdout })
-        .on("line", (line) => void clicked(line).catch((error) => log(`click not handled: ${error}`)));
+      eachLine(consume.stderr, log);
+      eachLine(consume.stdout, (line) => void clicked(line).catch((error) => log(`click not handled: ${error}`)));
       await new Promise((resolve) => consume.on("close", resolve));
       signal.removeEventListener("abort", stop);
       if (!signal.aborted) {
