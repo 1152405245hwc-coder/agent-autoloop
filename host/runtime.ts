@@ -5,12 +5,12 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { join } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { HOME, RULES_FILE } from "./home.ts";
-import { cardHash, credential, digest, whose as keyHolder } from "../kernel/credentials.ts";
+import { stateOf as state, viewStatements } from "./state.ts";
+import { cardHash, digest, whose as keyHolder } from "../kernel/credentials.ts";
 import { decide } from "../kernel/decide.ts";
 import { NotFound } from "../kernel/errors.ts";
 import { evolve, rows, keyOf, statement, type Fact, type Row, type Table } from "../kernel/evolve.ts";
 import * as query from "../kernel/query.ts";
-import { stateOf as state } from "../kernel/state.ts";
 import { commitLatest, openView } from "../kernel/store.ts";
 import type { Job } from "../protocol/job.ts";
 import { parseRules as checkRules, RulesError } from "../protocol/rules.ts";
@@ -42,25 +42,10 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS facts(seq INTEGER PRIMARY KEY, fact TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS projections(collection TEXT, key TEXT, data TEXT NOT NULL, PRIMARY KEY(collection, key));
 `);
-db.function("card_token", { deterministic: true }, (id, at) => credential(environment, "card", id, at));
 db.function("card_hash", { deterministic: true }, (id, at) => cardHash(environment, id, at));
 
-const schema = readFileSync(new URL("../kernel/schema.sql", import.meta.url), "utf8");
-const views: string[] = [];
-for (const [, table, body] of schema.matchAll(/CREATE TABLE (\w+) \(([\s\S]*?)\n\);/g)) {
-  const columns = [...body.matchAll(/^  (\w+) (?:INTEGER|TEXT)/gm)].map(([, column]) => column);
-  const selected = columns.map((column) =>
-    column === "token"
-      ? "card_token(json_extract(data,'$.id'),json_extract(data,'$.created_at')) AS token"
-      : `json_extract(data,'$.${column}') AS ${column}`,
-  );
-  views.push(
-    `DROP VIEW IF EXISTS ${table}; CREATE VIEW ${table} AS SELECT ${selected.join(",")} FROM projections WHERE collection='${table}'`,
-  );
-}
-
 // Other processes must see either the old views or the new ones, never the gap between DROP and CREATE.
-db.exec(`BEGIN IMMEDIATE; ${views.join(";")}; COMMIT`);
+db.exec(`BEGIN IMMEDIATE; ${viewStatements.join(";")}; COMMIT`);
 
 const CARD_HASH_INDEX =
   "CREATE INDEX IF NOT EXISTS projection_card_hash ON projections(card_hash(json_extract(data,'$.id'),json_extract(data,'$.created_at'))) WHERE collection='cards'";

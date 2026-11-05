@@ -1,5 +1,6 @@
 // The architecture, as a test. The hub's kernel knows no vendor and makes no request of its own: everything connects to it.
-// Failure cases: a product name, an outbound request, a runtime dependency or an interface enters the kernel.
+// Failure cases: a product name, an outbound request, a runtime dependency or an interface enters the kernel; the kernel
+// grows with nobody having to say why.
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -9,6 +10,12 @@ const root = join(import.meta.dirname, "..");
 const kernel = readdirSync(join(root, "kernel"))
   .filter((f) => f.endsWith(".ts"))
   .map((f) => [f, readFileSync(join(root, "kernel", f), "utf8")] as const);
+
+test("the kernel stays small", () => {
+  // A budget: what takes it past this says so in this line's diff, after looking at what could go or live outside.
+  const lines = kernel.reduce((total, [, text]) => total + text.split("\n").length - 1, 0);
+  assert.ok(lines <= 1650, `kernel/ 有 ${lines} 行，超过了上限 1650：先看有什么能删或能放到外面`);
+});
 
 test("the kernel names no product", () => {
   // Words in the two comments that say why a limit is what it is are the only exception: a limit has a reason.

@@ -349,7 +349,7 @@ Webhook 通道的 `config.json` 配置使用 `use: "webhook"`、`url` 和 `platf
 | 目录 | 职责 |
 |---|---|
 | `kernel/` | 确定性决策、演进、日志、到期、规则匹配、请求处理、卡片表单 |
-| `host/` | Node HTTP、文件与 SQLite 连接、时钟、配置、后台服务和插件加载 |
+| `host/` | Node HTTP、文件与 SQLite 连接、时钟、配置、状态汇总、后台服务和插件加载 |
 | `protocol/` | 类型、JSON Schema、输入校验、HTTP 客户端与一致性检查 |
 | `worker/` | 接单、Agent 进程、心跳与停止、回执读取和提交 |
 | `cli/`、`bin/` | 用户命令、MCP 与命令行启动入口 |

@@ -111,18 +111,3 @@ export function dayStart(now: number, zone: string) {
   const clock = wallClock(now, zone);
   return moment(clock.year, clock.month, clock.day, 0, 0, zone) ?? now;
 }
-
-const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六", "日"];
-
-/** A common schedule in plain words (每天 18:00, 每周日 06:00, 工作日 09:00, 每月 1 日 04:00); any other as written. */
-export function describeCron(text: string) {
-  const [minute, hour, day, month, weekday] = text.trim().split(/\s+/);
-  const number = /^\d+$/;
-  if (!number.test(minute) || !number.test(hour) || month !== "*" || !parseCron(text)) return text;
-  const at = `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
-  if (day === "*" && weekday === "*") return `每天 ${at}`;
-  if (day === "*" && number.test(weekday)) return `每周${WEEKDAYS[Number(weekday)]} ${at}`;
-  if (day === "*" && weekday === "1-5") return `工作日 ${at}`;
-  if (number.test(day) && weekday === "*") return `每月 ${Number(day)} 日 ${at}`;
-  return text;
-}

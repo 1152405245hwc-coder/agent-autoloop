@@ -724,9 +724,9 @@ test("what only needed saying goes stale: a channel coming back after a day does
 test("a card's link goes only to a channel that allows it, and opens only that card", () => {
   clean();
   const { id } = asked(1);
-  const token = card(id).token;
-  assert.match(nextCard("plain", at(1))!.link!, new RegExp(`^https://hub\\.test/c/${token}$`));
+  const link = nextCard("plain", at(1))!.link!;
+  assert.match(link, /^https:\/\/hub\.test\/c\/[\w-]+$/);
   assert.equal(nextCard("chat", at(1))!.link, null, "a channel with buttons has no use for a link that answers");
-  assert.equal(cardByToken(token)!.id, id);
+  assert.equal(cardByToken(new URL(link).pathname.slice("/c/".length))!.id, id);
   assert.equal(cardByToken("made-up"), undefined);
 });

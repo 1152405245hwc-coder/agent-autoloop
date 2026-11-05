@@ -1,5 +1,6 @@
 // `rules explain` and `emit --dry-run`: what this machine's rules file says, without asking a hub or writing a fact.
-import { describeCron, nextRun, parseCron } from "../kernel/cron.ts";
+import { describeCron } from "../host/state.ts";
+import { nextRun, parseCron } from "../kernel/cron.ts";
 import { cronOf, eventRule, typeMatches, type Rule, type Rules } from "../kernel/rules.ts";
 import { parseRules } from "../protocol/rules.ts";
 import { parseEvent } from "../protocol/validate.ts";

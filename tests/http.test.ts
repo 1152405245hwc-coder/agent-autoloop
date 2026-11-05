@@ -32,7 +32,7 @@ export default function ({ headers, body, secret }) {
 );
 process.env.AGENT_AUTOLOOP_SECRET_HOOKS = "hook-secret";
 const { serve } = await import("../host/http.ts");
-const { addKey, createCard, reloadRules } = await import("../host/runtime.ts");
+const { addKey, createCard, getView, reloadRules, view } = await import("../host/runtime.ts");
 const { all, one } = await import("../host/runtime.ts");
 
 const keys = {
@@ -331,7 +331,7 @@ test("a card's link lasts a week: after that it neither answers nor shows the ca
   const days = (count: number) => Date.now() - count * 24 * 60 * 60_000;
   const made = (key: string, at: number) =>
     createCard({ key, kind: "ask", title: "放了很久的问题", text: "放了很久的内容", options: ["甲", "乙"] }, at).card;
-  const linkOf = (id: number) => `/c/${one<{ token: string }>("SELECT token FROM cards WHERE id = ?", [id])!.token}`;
+  const linkOf = (id: number) => new URL(view(getView().get("cards", id)!, null, true).link!).pathname;
 
   const recent = made("link-recent", days(6));
   assert.equal((await call(linkOf(recent))).status, 200);
