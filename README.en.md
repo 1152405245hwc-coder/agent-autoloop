@@ -36,21 +36,21 @@ Then run a real loop with your own agent — ask, exit while it waits, make the 
 agent-autoloop try
 ```
 
-> CLI output and default notification strings are currently in Chinese.
+> CLI output and default notification strings are still Chinese until they are translated. Sample CLI output in this README is that same text written in English.
 
-Here is the actual output from Codex in a non-interactive terminal:
+Here is the output from Codex in a non-interactive terminal, written in English:
 
 ```text
-事件发出去了，Agent 开始干活……
+Event sent. The agent is getting to work...
 
-Agent 结束了这一轮，问了你一个问题。它现在不占进程、不花 Token。
+The agent finished this round and asked you a question. No process is running for it now, and it is not spending tokens.
 
-【等你决定】#1 试跑：选一个颜色
-这是一次试跑，选哪个都行。
-  1. 蓝色
-  2. 绿色
-回答：agent-autoloop answer 1 <序号>
-答完运行 agent-autoloop status，能看到它接着把活干完。
+[Your call] #1 Try run: pick a color
+This is a try run. Either choice is fine.
+  1. Blue
+  2. Green
+Answer: agent-autoloop answer 1 <number>
+After you answer, run agent-autoloop status to see it pick the work back up and finish.
 ```
 
 In an interactive terminal, just type the option number. In a non-interactive terminal, run `agent-autoloop answer 1 2` to pick green. Then `agent-autoloop status` shows that the agent resumed its conversation and finished, along with rounds, tokens, and cost for today and the past seven days ([how they are counted](skills/agent-autoloop/SKILL.md#看情况回答)).
@@ -188,11 +188,11 @@ Run these from `~/.agent-autoloop/app`:
 | The benchmarks below | `npm run benchmark` |
 
 ```text
-第 1 轮 · 演示
-11-03 20:47:25  规则版本 #1
-11-03 20:47:25  触发事件：来源 local · 类型 demo.start · 对象 example
-11-03 20:47:25  local 领取（演示程序）
-11-03 20:47:25  结束：演示完成
+Round 1 · Demo
+11-03 20:47:25  Rules version #1
+11-03 20:47:25  Triggering event: source local · type demo.start · subject example
+11-03 20:47:25  local picked it up (demo program)
+11-03 20:47:25  Finished: demo complete
 ```
 
 ### Benchmarks
