@@ -1,7 +1,8 @@
 // How much CI a change gets. Failure cases: a change to kernel code skips the short simulation; code, or text a test reads,
 // counts as text and runs nothing; a file nobody has sorted out yet skips anything; a move out of kernel/ counts only where
 // it landed; what reaches main skips the full run, so a commit whose run was cancelled or replaced is never checked; a diff
-// that can't be read means less checking rather than more.
+// that can't be read means less checking rather than more; a release's version number takes the full run, or a dependency
+// changed beside one skips it.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -15,7 +16,7 @@ after(() => rmSync(dir, { recursive: true, force: true }));
 
 let repos = 0;
 /** A repository whose HEAD is what GitHub checks out for a PR: a merge of the change into main. */
-function merged(change: (root: string) => void) {
+function merged(change: (root: string) => void, before: (root: string) => void = () => {}) {
   const root = join(dir, `repo-${++repos}`);
   mkdirSync(root);
   const git = (...args: string[]) =>
@@ -26,6 +27,7 @@ function merged(change: (root: string) => void) {
     });
   git("init", "-q", "-b", "main");
   write(root, "kernel/moved.ts");
+  before(root);
   git("add", "-A");
   git("commit", "-q", "-m", "first");
   git("switch", "-q", "-c", "change");
@@ -82,6 +84,59 @@ for (const [files, expected] of [
     assert.equal(scope(touching(...files)), `scope=${expected}`);
   });
 }
+
+const PACKAGE = `{
+  "name": "x",
+  "version": "1.1.0",
+  "devDependencies": {
+    "typescript": "6.0.0"
+  }
+}
+`;
+const LOCK = `{
+  "name": "x",
+  "version": "1.1.0",
+  "packages": {
+    "": {
+      "name": "x",
+      "version": "1.1.0"
+    },
+    "node_modules/typescript": {
+      "version": "6.0.0",
+      "integrity": "sha512-old"
+    }
+  }
+}
+`;
+/** A PR that changes the package files already in the repository. */
+const editingPackages = (edit: (text: string) => string, also: string[] = []) =>
+  merged(
+    (root) => {
+      writeFileSync(join(root, "package.json"), edit(PACKAGE));
+      writeFileSync(join(root, "package-lock.json"), edit(LOCK));
+      for (const other of also) write(root, other);
+    },
+    (root) => {
+      writeFileSync(join(root, "package.json"), PACKAGE);
+      writeFileSync(join(root, "package-lock.json"), LOCK);
+    },
+  );
+const release = (text: string) => text.replaceAll('"version": "1.1.0"', '"version": "1.2.0"');
+
+test("a release's version number alone doesn't take the full run", () => {
+  assert.equal(scope(editingPackages(release)), "scope=normal");
+  assert.equal(scope(editingPackages(release, ["README.md"])), "scope=normal");
+  assert.equal(scope(editingPackages(release, ["kernel/decide.ts"])), "scope=kernel");
+});
+
+test("a dependency changed, with or without a version number, still does", () => {
+  const dependency = (text: string) =>
+    text.replace('"typescript": "6.0.0"', '"typescript": "6.1.0"').replace("sha512-old", "sha512-new");
+  assert.equal(scope(editingPackages(dependency)), "scope=full");
+  assert.equal(scope(editingPackages((text) => dependency(release(text)))), "scope=full");
+  const script = (text: string) => text.replace('"name": "x",', '"name": "x",\n  "scripts": {},');
+  assert.equal(scope(editingPackages((text) => script(release(text)))), "scope=full");
+});
 
 test("moving a file out of kernel/ counts where it left", () => {
   const root = merged((at) => {

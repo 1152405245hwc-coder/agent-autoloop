@@ -13,9 +13,18 @@ if [ "${GITHUB_EVENT_NAME:-}" != pull_request ] ||
   exit 0
 fi
 
+# A release moves the version number and nothing the long runs check. A dependency's own version line comes with lines
+# this doesn't accept, which keeps a dependency change on the full run.
+only_version() {
+  lines=$(git diff --no-renames -U0 HEAD^1 HEAD -- "$1") || return 1
+  ! printf '%s\n' "$lines" | grep -E '^[-+]' | grep -vE '^(\+\+\+|---) ' |
+    grep -qvE '^[-+][[:space:]]*"version": "[^"]*",?$'
+}
+
 scope=docs
 while IFS= read -r file; do
   case "$file" in
+    package.json | package-lock.json) if only_version "$file"; then kind=normal; else kind=full; fi ;;
     # tests/example-plugins.test.ts runs the commands in this tutorial.
     docs/plugins.md) kind=normal ;;
     README.md | README.en.md | INSTALL.md | SECURITY.md | CONTRIBUTING.md | AGENTS.md | LICENSE) kind=docs ;;
