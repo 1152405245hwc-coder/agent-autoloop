@@ -623,8 +623,18 @@ async function tell(args: string[]) {
   console.log(answer.duplicate ? "这件事已经说过了，这次没再发。" : "说了。");
 }
 
+/** A run is named by its number; anything else would reach the hub as /v1/runs/NaN and come back as "没有这个地址". */
+function runOf(word: string | undefined, usage: string) {
+  const id = Number(word);
+  if (word === undefined || !/^[1-9][0-9]*$/.test(word) || !Number.isSafeInteger(id)) return fail(usage);
+  return id;
+}
+
 async function why(args: string[]) {
-  const id = Number(args[0]);
+  const id = runOf(
+    args.find((arg) => !arg.startsWith("--")),
+    "用法：agent-autoloop why <第几轮> [--json]",
+  );
   const facts = await ownerClient().why(id);
   if (args.includes("--json")) return console.log(JSON.stringify(facts, null, 2));
   const { formatWhy } = await import("./why.ts");
@@ -640,7 +650,8 @@ async function checkConformance(args: string[]) {
 }
 
 async function stop(args: string[]) {
-  await ownerClient().cancel(Number(args[0]));
+  const id = runOf(args[0], "用法：agent-autoloop stop <第几轮>");
+  await ownerClient().cancel(id);
   console.log("通知它停了。");
 }
 
