@@ -7,7 +7,7 @@ import { join } from "node:path";
 const edits: [string, string, string, string][] = [
   ["event-duplicate", "decide.ts", "if (existing) return { event:", "if (false && existing) return { event:"],
   ["source-boundary", "decide.ts", "rule.when.source === source", "true"],
-  ["parallel-lane", "decide.ts", 'const lane = rule.parallel ? subject : ""', 'const lane = ""'],
+  ["parallel-lane", "decide.ts", 'id, rule.parallel ? event.subject : "")', 'id, "")'],
   ["group-capacity", "decide.ts", "claimed.filter((other) => other.grp === run.grp).length <", "0 <"],
   ["lane-exclusion", "decide.ts", "!claimed.some((other) => other.grp === run.grp && other.lane === run.lane)", "true"],
   [
