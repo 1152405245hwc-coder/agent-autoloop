@@ -1,6 +1,7 @@
 // Reading the command line: `init --help` used to install instead of printing how to use it, and a misspelt `--port`
-// installed with the default in silence. Both are found here by running the real program in a home of its own and
-// looking at what it wrote. Nothing is installed, no service is touched and no Agent is called.
+// installed with the default in silence. `update --help` and `uninstall --yes --help` used to run the real update or
+// uninstall; a misspelt flag on either was accepted. Found here by running the real program in a home of its own and
+// looking at what it wrote. Nothing is installed, updated or uninstalled, no service is touched and no Agent is called.
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -64,4 +65,43 @@ test("try --help says how to use it and runs nothing", async () => {
   const ran = await run(["try", "--help"]);
   assert.equal(ran.code, 0);
   assert.match(ran.stdout, /用法：agent-autoloop try/);
+});
+
+test("update --help says how to use it and updates nothing", async () => {
+  const ran = await run(["update", "--help"]);
+  assert.equal(ran.code, 0);
+  assert.match(ran.stdout, /用法：agent-autoloop update/);
+  assert.doesNotMatch(ran.stdout, /已经是最新的|更新好了/);
+});
+
+test("update -h does the same", async () => {
+  const ran = await run(["update", "-h"]);
+  assert.equal(ran.code, 0);
+  assert.match(ran.stdout, /用法：agent-autoloop update/);
+});
+
+test("a flag update does not read stops it instead of updating", async () => {
+  const ran = await run(["update", "--yse"]);
+  assert.equal(ran.code, 1);
+  assert.match(ran.stderr, /不认识的参数：--yse/);
+});
+
+test("uninstall --help says how to use it and uninstalls nothing", async () => {
+  const ran = await run(["uninstall", "--help"]);
+  assert.equal(ran.code, 0);
+  assert.match(ran.stdout, /用法：agent-autoloop uninstall/);
+  assert.match(ran.stdout, /--yes/);
+});
+
+test("uninstall --yes --help prints usage and uninstalls nothing", async () => {
+  const ran = await run(["uninstall", "--yes", "--help"]);
+  assert.equal(ran.code, 0);
+  assert.match(ran.stdout, /用法：agent-autoloop uninstall/);
+  assert.doesNotMatch(ran.stdout + ran.stderr, /已卸载|卸载完|删除自身/);
+});
+
+test("a flag uninstall does not read stops it instead of uninstalling", async () => {
+  const ran = await run(["uninstall", "--yse"]);
+  assert.equal(ran.code, 1);
+  assert.match(ran.stderr, /不认识的参数：--yse/);
 });

@@ -71,6 +71,15 @@ const STATUS_USAGE = `用法：agent-autoloop status [--json]
 现在什么情况：谁在线、等你什么、在做什么、做过什么、花了多少。
   --json  输出 /v1/state 的原始结构，给脚本和看板用`;
 
+const UPDATE_USAGE = `用法：agent-autoloop update
+
+更新到最新发布的版本。没有参数。`;
+
+const UNINSTALL_USAGE = `用法：agent-autoloop uninstall [--yes]
+
+卸载程序并保留规则、密钥和记录。
+  --yes  跳过确认`;
+
 type Flags = Record<string, string | true>;
 
 function flags(args: string[]) {
@@ -654,10 +663,14 @@ const commands: Record<string, () => unknown> = {
   stop: () => stop(args),
   backup: () => backupCommand(args),
   restore: () => restoreCommand(args),
-  update,
+  update: () => {
+    flagsOf(args, [], UPDATE_USAGE);
+    return update();
+  },
   uninstall: async () => {
+    const { named } = flagsOf(args, ["yes"], UNINSTALL_USAGE);
     const { uninstall } = await import("./uninstall.ts");
-    await uninstall(flags(args).named.yes !== undefined, process.stdin.isTTY ? askAtTerminal : null);
+    await uninstall(named.yes !== undefined, process.stdin.isTTY ? askAtTerminal : null);
   },
   service: () => service(args),
   help: () => console.log(HELP),
