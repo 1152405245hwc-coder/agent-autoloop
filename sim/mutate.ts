@@ -8,6 +8,8 @@ const edits: [string, string, string, string][] = [
   ["event-duplicate", "decide.ts", "if (existing) return { event:", "if (false && existing) return { event:"],
   ["source-boundary", "decide.ts", "rule.when.source === source", "true"],
   ["parallel-lane", "decide.ts", 'id, rule.parallel ? event.subject : "")', 'id, "")'],
+  ["session-in-use", "decide.ts", "going.some((other) => (other.session ?? other.resume) === session)", "false"],
+  ["resume-after-stop", "decide.ts", 'last?.state !== "cancelled" && ', ""],
   ["group-capacity", "decide.ts", "claimed.filter((other) => other.grp === run.grp).length <", "0 <"],
   ["lane-exclusion", "decide.ts", "!claimed.some((other) => other.grp === run.grp && other.lane === run.lane)", "true"],
   [
@@ -67,9 +69,18 @@ const edits: [string, string, string, string][] = [
   ["log-append", "store.ts", "for (const fact of facts) insert.run", "for (const fact of []) insert.run"],
   ["transaction-removed", "store.ts", "return transaction(db, () => {", "return ((work) => work())(() => {"],
 ];
-const tests = ["kernel", "events", "cards", "runs", "schedule", "stream", "purity", "queue-costs", "http"].map(
-  (n) => `tests/${n}.test.ts`,
-);
+const tests = [
+  "kernel",
+  "events",
+  "cards",
+  "runs",
+  "schedule",
+  "stream",
+  "purity",
+  "queue-costs",
+  "http",
+  "resume-thread",
+].map((n) => `tests/${n}.test.ts`);
 export function mutate() {
   const root = join(import.meta.dirname, "..");
   const folder = mkdtempSync(join(tmpdir(), "agent-autoloop-mutation-"));
@@ -84,7 +95,7 @@ export function mutate() {
       timeout: 30000,
     });
   try {
-    for (const name of ["kernel", "protocol", "host", "tests", "package.json"])
+    for (const name of ["kernel", "protocol", "host", "cli", "plugins", "sim", "tests", "package.json"])
       cpSync(join(root, name), join(folder, name), { recursive: true });
     symlinkSync(join(root, "node_modules"), join(folder, "node_modules"));
     const baseline = run();
