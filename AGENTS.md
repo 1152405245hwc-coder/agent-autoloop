@@ -52,7 +52,7 @@ PR 一开出来就开审查，几个 PR 同时审，不排队。审查报的问�
 - 相关 Issue 的状态都说对了。
 - 工作树和临时分支清掉。
 - 发 Release 之前让 Codex 审一遍这批的全部改动，查出的问题留在这一批修，不为它另发一版。
-- 发一个 Release：版本号只写在 tag 上，不进任何文件。选一个完整检查已经通过、真实跑过并核实过的提交，在它上面跑每日检查（`gh workflow run nightly.yml --ref main -f commit=<提交>`），过了再把 tag 打在它上面，写清这批改了什么。版本号怎么加、什么时候发见[协议](docs/protocol.md#版本与兼容)；发出去的 tag 不挪不删。
+- 发一个 Release：版本号只写在 tag 上，不进任何文件。选一个完整检查已经通过、真实跑过并核实过的提交，在它上面跑每日检查（`gh workflow run nightly.yml --ref main -f commit=<完整提交号>`），过了再把 tag 打在它上面，写清这批改了什么。版本号怎么加、什么时候发见[协议](docs/protocol.md#版本与兼容)；发出去的 tag 不挪不删。
 
 ## 内核边界
 

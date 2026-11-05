@@ -1,4 +1,6 @@
 name: nightly
+# A run asked for by commit is listed under the branch's newest commit, so its name says which one it checked.
+run-name: ${{ inputs.commit && format('nightly {0}', inputs.commit) || 'nightly' }}
 on:
   schedule:
     - cron: "23 18 * * *"

@@ -16,7 +16,8 @@ const log = (who: string) => (line: string) => console.log(`${new Date().toISOSt
 /** Only one of these per install: a second would take work beside the first. */
 function lock() {
   const running = runningUp();
-  if (running !== null) throw new Error(`已经在跑了（进程 ${running}）`);
+  // Its own number is what was left behind: pid 1 every time in a container, and a matter of luck after a restart.
+  if (running !== null && running !== process.pid) throw new Error(`已经在跑了（进程 ${running}）`);
   const file = path.join(HOME, "up.pid");
   writeFileSync(file, String(process.pid));
   return () => {
