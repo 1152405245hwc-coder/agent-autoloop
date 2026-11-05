@@ -37,14 +37,13 @@ release=""
 if [ "$from" = "$PUBLISHED" ]; then
   # On a line of its own: in a pipe, not getting an answer would look like there being no releases.
   tags=$(git ls-remote --refs --tags "$PUBLISHED" 'v*')
-  # v1.0.0 can only pull a branch, so a copy sent there could never leave.
-  release=$(printf '%s\n' "$tags" | sed -n -e '/refs\/tags\/v1\.0\.0$/d' -e 's#.*refs/tags/\(v[0-9]*\.[0-9]*\.[0-9]*\)$#\1#p' |
+  release=$(printf '%s\n' "$tags" | sed -n 's#.*refs/tags/\(v[0-9]*\.[0-9]*\.[0-9]*\)$#\1#p' |
     sort -t. -k1.2,1n -k2,2n -k3,3n | tail -n 1)
 fi
 if [ ! -d "$APP/.git" ]; then
   git -c advice.detachedHead=false clone --quiet --depth 1 ${release:+--branch "$release"} -- "$REPO" "$APP"
 elif [ -n "$release" ]; then
-  git -C "$APP" fetch --quiet --depth 1 origin "+refs/tags/$release:refs/tags/$release"
+  git -C "$APP" fetch --quiet --depth 1 origin "refs/tags/$release:refs/tags/$release"
   git -C "$APP" checkout --quiet --detach "$release"
 else
   git -C "$APP" pull --ff-only --quiet
