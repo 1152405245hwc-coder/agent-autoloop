@@ -211,7 +211,7 @@ GET /v1/cards/next?wait=50    Authorization: Bearer <通道的密钥>
 ```
 
 - `ref` 是空的就发一条新的；不是空的就把那条改成现在的样子，改不了就直接报告。
-- 发完报告：`POST /v1/cards/56/delivered { "version": 2, "ref": "om_xxx" }`。没报告的过一分钟会再给你。**支持幂等键的平台，发新消息只用卡片编号，不带版本**。平台不支持时无法保证去重，Webhook 模板可能在报告丢失后重发。
+- 发完报告：`POST /v1/cards/56/delivered { "version": 2, "ref": "om_xxx" }`。没报告的过一分钟会再给你。**支持幂等键的平台，发新消息只用卡片编号，不带版本**（飞书改不动已经结束的卡片时另发一条，这一条才带版本）。平台不支持时无法保证去重，Webhook 模板可能在报告丢失后重发。
 - 发不出去：`POST /v1/cards/56/failed { "version": 2, "error": "…" }`。第一次发送隔得越来越久地重试，一小时后放弃（卡片还开着，`agent-autoloop status` 看得到）；通道一直没来领不算在内。
 - 还没送达就已经解决的卡片不再打扰你。
 - 你点了：`POST /v1/cards/56/answer { "choice": 1, "by": "ou_xxx", "ref": "om_xxx" }`。只有第一次算数，`by` 要在这个通道的 `answerers` 里，`ref` 要和送达的那条一致。不带选项的通知有一个“已处理”按钮，点了就结案；也可以带 `text` 写一句处理说明，结案时存进卡片的 `answer`，卡面和 `/v1/state` 都看得到。
