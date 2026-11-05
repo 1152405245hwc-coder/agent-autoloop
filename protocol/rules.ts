@@ -96,9 +96,6 @@ function checkRule(issues: string[], rules: Rules, rule: Rule, names: Set<string
   if (!rule.skill && !rule.prompt && rules.agents[rule.to]?.use !== "command") {
     issues.push(`${where}的 skill 和 prompt 至少写一个`);
   }
-  // Here and not on the agent: only a rule makes it run, and one no rule uses has always been allowed to be unfinished.
-  const agent = rules.agents[rule.to];
-  if (agent?.use === "acp" && !agent.command) issues.push(`${where}用的 Agent ${rule.to} 缺少 command`);
   if (isObject(rule.emits)) {
     const emittable: Check = (value) => value !== SCHEDULE && isKeyOf(rules.sources)(value);
     checkFields(issues, `${where}的 emits `, rule.emits, [

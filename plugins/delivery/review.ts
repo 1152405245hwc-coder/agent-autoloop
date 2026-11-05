@@ -3,14 +3,9 @@
 import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { git, matches, type Settings } from "./project.ts";
+import { git, matches, PLAIN_FILE_MODES, type Settings } from "./project.ts";
+import { IN_THE_APP } from "../codex/agent.ts";
 import { findProgram } from "../../worker/agents.ts";
-
-const CODEX_IN_THE_APP = [
-  "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
-  "/Applications/Codex.app/Contents/Resources/codex",
-];
-const PLAIN_FILE_MODES = ["000000", "100644"];
 
 export type Finding = { title: string; text: string };
 
@@ -99,7 +94,7 @@ export async function reviewSnapshot(bare: string, snapshot: string, main: strin
   const level = paths.some((path) => matches(path, config.review.xhigh)) ? "xhigh" : "high";
   const output = join(snapshot, "review.json");
   const { command } = config.review;
-  const argv = command ?? [findProgram("codex", () => CODEX_IN_THE_APP), ...codexCommand(output, level)];
+  const argv = command ?? [findProgram("codex", () => IN_THE_APP), ...codexCommand(output, level)];
   const args = argv.slice(1).map((arg) => arg.replaceAll("{input}", changesFile));
   const child = execFile(argv[0], args, { cwd: snapshot, timeout: 600000, maxBuffer: 8 * 1024 * 1024 });
   child.stdin!.end(prompt);

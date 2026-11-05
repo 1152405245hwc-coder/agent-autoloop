@@ -1,6 +1,6 @@
 // The architecture, as a test. The hub's kernel knows no vendor and makes no request of its own: everything connects to it.
 // Failure cases: a product name, an outbound request, a runtime dependency or an interface enters the kernel; the kernel
-// grows with nobody having to say why.
+// grows with nobody having to say why; what loads and runs the plugins comes to know one of them by name, or to import it.
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -17,14 +17,36 @@ test("the kernel stays small", () => {
   assert.ok(lines <= 1700, `kernel/ 有 ${lines} 行，超过了上限 1700：先看有什么能删或能放到外面`);
 });
 
+const VENDORS =
+  /claude|anthropic|codex|openai|gemini|cursor|hermes|openclaw|feishu|lark|dingtalk|telegram|slack|github|gitlab|\bacp\b|\bdsh\b/i;
+
+/** A comment may say where a limit came from. */
+function namesNoProduct(file: string, text: string) {
+  for (const [i, line] of text.split("\n").entries()) {
+    if (line.trim().startsWith("//") || line.trim().startsWith("/**")) continue;
+    assert.ok(!VENDORS.test(line), `${file}:${i + 1}: ${line.trim()}`);
+  }
+}
+
 test("the kernel names no product", () => {
-  // Words in the two comments that say why a limit is what it is are the only exception: a limit has a reason.
-  const vendors =
-    /claude|anthropic|codex|openai|gemini|cursor|hermes|openclaw|feishu|lark|dingtalk|telegram|slack|github|gitlab/i;
-  for (const [file, text] of kernel) {
-    for (const [i, line] of text.split("\n").entries()) {
-      if (line.trim().startsWith("//") || line.trim().startsWith("/**")) continue;
-      assert.ok(!vendors.test(line), `${file}:${i + 1}: ${line.trim()}`);
+  for (const [file, text] of kernel) namesNoProduct(file, text);
+});
+
+test("what loads and runs the plugins names none either: a new product is a new plugin", () => {
+  for (const folder of ["host", "protocol", "worker"]) {
+    for (const file of readdirSync(join(root, folder)).filter((name) => name.endsWith(".ts"))) {
+      // What the worker keeps out of an agent's environment, of a session the worker itself may be in: nothing knows it else.
+      const text = readFileSync(join(root, folder, file), "utf8").replace("CLAUDECODE$|CLAUDE_CODE_|CODEX_", "");
+      namesNoProduct(`${folder}/${file}`, text);
+    }
+  }
+});
+
+test("nothing but the loader reaches a plugin", () => {
+  for (const folder of ["kernel", "host", "protocol", "worker", "cli"]) {
+    for (const file of readdirSync(join(root, folder)).filter((name) => name.endsWith(".ts"))) {
+      const text = readFileSync(join(root, folder, file), "utf8");
+      assert.ok(!/from "[^"]*plugins\//.test(text), `${folder}/${file}`);
     }
   }
 });

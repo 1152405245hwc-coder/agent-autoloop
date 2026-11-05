@@ -4,10 +4,9 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import type { DeliveryIO } from "./delivery.ts";
-import { git, liveRelease, releaseRequired } from "./project.ts";
+import { git, liveRelease, releaseRequired, REPO } from "./project.ts";
 import { reviewSnapshot } from "./review.ts";
 
-const REPO = /^[\w.-]+\/[\w.-]+$/;
 const LONGEST_WAIT = 1800000;
 
 export function gh(args: string[], input?: object) {

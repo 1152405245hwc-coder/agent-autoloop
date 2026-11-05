@@ -43,17 +43,6 @@ test("the fixture loads, with defaults filled in", () => {
   assert.equal(r.sources.schedule.name, "定时");
   assert.equal(r.agents.a1.access, "edit", "the safe level unless the rule's author asks otherwise");
   assert.equal(r.agents.a2.access, "full");
-  const acp = good();
-  acp.agents.a1.use = "acp";
-  acp.agents.a1.command = ["acp-program"];
-  assert.equal(parseRules(JSON.stringify(acp)).agents.a1.use, "acp", "an ACP agent with its command line is fine");
-  const spare = good();
-  spare.agents.spare = { name: "备用", worker: "w1", use: "acp" };
-  assert.equal(
-    parseRules(JSON.stringify(spare)).agents.spare.use,
-    "acp",
-    "no rule sends it anything, so nothing fails",
-  );
 });
 
 test("a mistake says which rule and what is wrong", () => {
@@ -116,9 +105,6 @@ test("a mistake says which rule and what is wrong", () => {
   problem((r) => {
     delete r.agents.a3.command;
   }, /Agent a3.*command/);
-  problem((r) => {
-    r.agents.a1.use = "acp";
-  }, /规则「意见」用的 Agent a1 缺少 command/);
   problem((r) => {
     r.agents.a1.oops = 1;
   }, /Agent a1 有不认识的字段 oops/);

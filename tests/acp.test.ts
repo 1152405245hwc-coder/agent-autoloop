@@ -13,7 +13,7 @@
 // in the middle of a message loses its first half; a finished tool call between two messages with no id runs them together,
 // so a "没跑成" after it reads as work done; a line that can't be read, which an agent must not write, is passed over, so one
 // with no newline takes the answer with it and the run hangs until its time limit. A failed turn doesn't say so until the agent and its stdout are gone, which may be never; its half-written answer counts; or what the
-// agent itself said on stderr is lost from the reason.
+// agent itself said on stderr is lost from the reason. An agent with no command line doesn't say what's missing.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync, rmSync, mkdirSync, symlinkSync } from "node:fs";
@@ -21,7 +21,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import acp from "../plugins/acp/agent.ts";
-import { permission } from "../plugins/acp/bridge.ts";
+import { bridge, permission } from "../plugins/acp/bridge.ts";
 import { versionName } from "../host/version.ts";
 import { acpAgent } from "./helpers.ts";
 const home = mkdtempSync(join(tmpdir(), "agent-autoloop-acp-"));
@@ -513,4 +513,17 @@ test("ACP refuses incompatible versions and premature process exit", async () =>
 test("the agent is told which version this is", async () => {
   await run(null);
   assert.equal(readFileSync(join(home, "client-version"), "utf8"), versionName());
+});
+
+test("over ACP, an agent with no command line says what's missing", async () => {
+  const turn = {
+    prompt: "",
+    session: "",
+    resume: null,
+    cwd: home,
+    access: "read",
+    contextFile: "",
+    folder: "",
+  } as const;
+  await assert.rejects(bridge(turn), /ACP 要在 command 写启动命令/);
 });

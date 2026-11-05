@@ -13,7 +13,7 @@ const LONGEST_TIMER = 2147483647;
 const TICK_RETRY = 5_000;
 
 function logStream(after: number, signal: AbortSignal, key: string) {
-  let cursor = after;
+  let position = after;
   let unsubscribe = () => {};
   let stop = () => {};
   const detach = () => {
@@ -34,8 +34,8 @@ function logStream(after: number, signal: AbortSignal, key: string) {
         if (stopped) return;
         if (!hub.whose("owner", key)) return stop();
         if (controller.desiredSize! <= 0) return;
-        for (const fact of hub.logAfter(cursor, 1)) {
-          cursor = fact.seq;
+        for (const fact of hub.logAfter(position, 1)) {
+          position = fact.seq;
           const message = `id: ${fact.seq}\nevent: fact\ndata: ${JSON.stringify(fact)}\n\n`;
           controller.enqueue(new TextEncoder().encode(message));
         }

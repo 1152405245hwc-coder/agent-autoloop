@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -85,7 +85,8 @@ export function mutate() {
       timeout: 30000,
     });
   try {
-    for (const name of ["kernel", "protocol", "host", "cli", "plugins", "sim", "tests", "package.json"])
+    // All of it: a test that reads a folder left out here fails the baseline here and nowhere else (#119, then #128).
+    for (const name of readdirSync(root).filter((name) => ![".git", ".claude", "node_modules"].includes(name)))
       cpSync(join(root, name), join(folder, name), { recursive: true });
     symlinkSync(join(root, "node_modules"), join(folder, "node_modules"));
     const baseline = run();
