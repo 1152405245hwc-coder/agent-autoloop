@@ -28,6 +28,8 @@ Works on macOS and Linux. You need Node 24, Git, curl, and at least one command-
 curl -fsSL https://raw.githubusercontent.com/KKKKhazix/agent-autoloop/main/install.sh | sh
 ```
 
+The installer and `agent-autoloop update` both install the newest [release](https://github.com/KKKKhazix/agent-autoloop/releases), which has passed every check.
+
 Then run a real loop with your own agent — ask, exit while it waits, make the call, resume:
 
 ```bash

@@ -43,7 +43,7 @@ const HELP = `Agent 自动化中台
   agent-autoloop mcp                      用标准输入输出连接 MCP 客户端
   agent-autoloop join <中台地址> --worker <名字> --key <密钥>
                                     另一台电脑只接活时用
-  agent-autoloop update                  更新到最新版
+  agent-autoloop update                  更新到最新发布的版本
   agent-autoloop uninstall [--yes]       卸载程序并保留数据；--yes 跳过确认
   agent-autoloop --version               版本和当前提交
   agent-autoloop up                      启动（平时由系统服务调用）
@@ -560,10 +560,12 @@ function addPlugin(args: string[]) {
 }
 
 async function update() {
-  const pulled = spawnSync("git", ["-C", ROOT, "pull", "--ff-only"], { stdio: "inherit" });
-  if (pulled.status !== 0) return fail("更新失败。");
+  const { updateCode } = await import("./update.ts");
+  const { changed, to } = updateCode(ROOT);
+  const version = to ? `（${to}）` : "";
+  if (!changed) return console.log(`已经是最新的${version}。`);
   const told = restartService();
-  console.log(told ? `更新好了。${told}` : "更新好了。");
+  console.log(`更新好了${version}。${told ?? ""}`);
 }
 
 async function askAtTerminal(question: string) {
