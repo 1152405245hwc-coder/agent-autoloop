@@ -170,7 +170,8 @@ function createCard(draft: Draft, spec: Row) {
     fyi: fyi ? 1 : 0,
     quiet: quiet ? 1 : 0,
   };
-  const card = add(draft, "cards", { ...fields, ...stored, state: fyi ? "closed" : "open", created_at: draft.at });
+  const state = fyi ? { state: "closed", closed_at: draft.at } : { state: "open" };
+  const card = add(draft, "cards", { ...fields, ...stored, ...state, created_at: draft.at });
   return { card: card.id, duplicate: false };
 }
 

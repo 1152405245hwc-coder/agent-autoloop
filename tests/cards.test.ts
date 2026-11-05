@@ -530,6 +530,17 @@ test("a notice has one button that closes it; something only to know has none an
   assert.deepEqual([given.id, given.state, given.options], [fyi, "closed", []]);
 });
 
+test("a card closed as it's made says when, or whatever reads the state takes it for still waiting", () => {
+  clean();
+  tell("source:app:k3", "应用", "只是告诉你", at(1));
+  ingest("app", note(1), at(2));
+  const job = claim("w1", at(2))!;
+  finish(job.run, job.token, { outcome: "done", notice: [{ title: "已设好", text: "每天九点", fyi: true }] }, at(3));
+  const [told, receipt] = [nextCard("chat", at(3))!, nextCard("chat", at(3))!];
+  assert.deepEqual([told.state, told.closedAt], ["closed", new Date(at(1)).toISOString()]);
+  assert.deepEqual([receipt.state, receipt.closedAt], ["closed", new Date(at(3)).toISOString()]);
+});
+
 test("receipt FYIs arrive as grey closed cards; ordinary notices and questions still need handling", () => {
   clean();
   ingest("app", note(1), at(0));
