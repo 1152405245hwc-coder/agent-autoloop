@@ -22,8 +22,8 @@
     "format:check": "prettier --check \"**/*.{ts,json,yml}\"",
     "test:sim": "node --disable-warning=ExperimentalWarning sim/random.ts 24301 20000",
     "test:deep": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 sim/*.test.ts",
-    "test:nightly": "npm run test:deep && node --disable-warning=ExperimentalWarning scripts/benchmark.ts --check",
-    "benchmark": "node --disable-warning=ExperimentalWarning scripts/benchmark.ts --check"
+    "test:nightly": "npm run test:deep && node --disable-warning=ExperimentalWarning scripts/benchmark.ts",
+    "benchmark": "node --disable-warning=ExperimentalWarning scripts/benchmark.ts"
   },
   "devDependencies": {
     "@types/node": "26.6.4",

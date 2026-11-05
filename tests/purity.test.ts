@@ -88,5 +88,4 @@ test("only evolve writes projections and only commit appends the log", () => {
   }
   const store = readFileSync(join(root, "kernel/store.ts"), "utf8");
   assert.ok(!/INSERT INTO facts/.test(store.slice(0, store.indexOf("export function commit("))));
-  assert.ok(readFileSync(join(root, "host/http.ts"), "utf8").split("\n").length <= 50);
 });

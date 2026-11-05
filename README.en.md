@@ -197,7 +197,7 @@ Round 1 · Demo
 
 ### Benchmarks
 
-Apple M5 Pro, 24 GB, Node 24.21.0. Each write is a separate request, acknowledged only after its transaction is durable. The pass marks in `npm run benchmark` are set for this machine, so another machine may report a miss.
+Apple M5 Pro, 24 GB, Node 24.21.0. Each write is a separate request, acknowledged only after its transaction is durable.
 
 | Metric | Measured |
 |---|---:|
