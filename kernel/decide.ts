@@ -160,8 +160,7 @@ function justSeen({ now }: Draft, row?: Row) {
 }
 
 function createCard(draft: Draft, spec: Row) {
-  const cards = rows(draft.view, "cards", { key: spec.key, ...(!spec.once && { state: "open" }) }, 1, true);
-  const existing = cards.findLast((card) => card.key === spec.key && (spec.once || card.state === "open"));
+  const [existing] = rows(draft.view, "cards", { key: spec.key, ...(!spec.once && { state: "open" }) }, 1, true);
   if (existing) return { card: existing.id, duplicate: true };
   const { once, run, options, fyi, quiet, ...fields } = spec;
   const stored = {
@@ -182,9 +181,8 @@ const notify = (draft: Draft, key: string, title: string, text: string, extra: R
 function enqueue(draft: Draft, rule: Rule, event: number, lane: string, resume?: string | null) {
   const rulesVersion = draft.view.get("config", "rules")!.version;
   const stamps = { not_before: draft.at, created_at: draft.at, rules_version: rulesVersion };
-  const isSameQueued = (run: Row) => run.rule === rule.name && run.lane === lane && run.state === "queued";
   const run =
-    rows(draft.view, "runs", { rule: rule.name, lane, state: "queued" }).find(isSameQueued) ??
+    rows(draft.view, "runs", { rule: rule.name, lane, state: "queued" })[0] ??
     add(draft, "runs", { rule: rule.name, agent: rule.to, grp: rule.group, lane, state: "queued", ...stamps });
   put(draft, "run_events", `${run.id}:${event}`, { run_id: run.id, event_id: event });
   if (resume) put(draft, "runs", run.id, { resume });
@@ -255,8 +253,7 @@ function sweep(draft: Draft) {
     const lastSeen = seen ? Date.parse(seen.seen_at) : undefined;
     if (lastSeen !== undefined && now - lastSeen <= WORKER_FRESH) {
       closeOffline(draft, worker);
-      const inDoubt = (run: Row) =>
-        run.state === "claimed" && workerOf(draft.view, run) === worker && Date.parse(run.seen_at) < now - RUN_LEASE;
+      const inDoubt = (run: Row) => workerOf(draft.view, run) === worker && Date.parse(run.seen_at) < now - RUN_LEASE;
       for (const run of rows(draft.view, "runs", { state: "claimed" }).filter(inDoubt)) {
         put(draft, "runs", run.id, { state: "unknown" });
         const agent = configuration(draft.view, run.rules_version).agents[run.agent].name;
@@ -288,7 +285,6 @@ function claimNext(draft: Draft, worker: string, claim: string) {
     run.state === "queued" &&
     agents.includes(ruleNamed(draft, run.rule)?.to ?? "") &&
     Date.parse(run.not_before) <= draft.now &&
-    ruleNamed(draft, run.rule) &&
     !claimed.some((other) => other.grp === run.grp && other.lane === run.lane) &&
     claimed.filter((other) => other.grp === run.grp).length < groupLimit(run.grp);
   // The same claim again means the answer got lost: it gets back the run it already has.
@@ -345,10 +341,8 @@ function retryLater(draft: Draft, run: Row, result: Result) {
     return rejected;
   }
   put(draft, "runs", id, { state: "queued", not_before: iso(notBefore), ...failure });
-  const sameThread = (other: Row) => other.id !== id && other.rule === run.rule && other.lane === run.lane;
-  for (const other of rows(draft.view, "runs", { rule: run.rule, lane: run.lane, state: "queued" }).filter(
-    sameThread,
-  )) {
+  const waiting = rows(draft.view, "runs", { rule: run.rule, lane: run.lane, state: "queued" });
+  for (const other of waiting.filter((other) => other.id !== id)) {
     for (const link of rows(draft.view, "run_events", { run_id: other.id })) {
       put(draft, "run_events", `${id}:${link.event_id}`, { run_id: id, event_id: link.event_id });
       set(draft, "run_events", `${other.id}:${link.event_id}`, null);
@@ -368,9 +362,7 @@ function retryLater(draft: Draft, run: Row, result: Result) {
 
 function scheduleReview(draft: Draft, run: Row, later: Later) {
   const { rule, lane } = run;
-  const existing = rows(draft.view, "timers", { rule, lane, key: later.key, event_id: null }).find(
-    (timer) => timer.rule === rule && timer.lane === lane && timer.key === later.key && timer.event_id === null,
-  );
+  const [existing] = rows(draft.view, "timers", { rule, lane, key: later.key, event_id: null });
   if (later.cancel) {
     if (existing) set(draft, "timers", existing.id, null);
     return;
@@ -392,8 +384,7 @@ function applyReceipt(draft: Draft, run: Row, result: Result) {
   closeOpen(draft, (key) => key === `run:${id}:failing`, "后来跑成了");
   closeOpen(draft, (key) => key === `run:${id}:unknown`, "结果回来了");
   const eventIds = eventsOf(draft.view, id).map((event) => event.id);
-  const isAnswered = (card: Row) => card.state === "decided" && eventIds.includes(card.answer_event);
-  for (const card of rows(draft.view, "cards", { answer_event: eventIds, state: "decided" }).filter(isAnswered)) {
+  for (const card of rows(draft.view, "cards", { answer_event: eventIds, state: "decided" })) {
     put(draft, "cards", card.id, { state: "done", result: summary, closed_at: draft.at, version: card.version + 1 });
   }
   for (const item of result.resolve ?? []) {
@@ -463,16 +454,14 @@ function answer(draft: Draft, id: number, given: Row) {
   if (given.ref !== undefined && (typeof given.ref !== "string" || [...given.ref].length > ANSWER_REF)) {
     throw new InputError(`消息编号最多 ${ANSWER_REF} 字`);
   }
+  const words = card.kind === "notice" ? "处理说明" : "回答";
+  if (given.text !== undefined && typeof given.text !== "string") throw new InputError(`${words}要是文字`);
+  const text = given.text?.trim() || null;
+  if (text !== null && [...text].length > ANSWER_TEXT) throw new InputError(`${words}最多 ${ANSWER_TEXT} 字`);
   if (card.kind === "notice") {
-    if (given.text !== undefined && typeof given.text !== "string") throw new InputError("处理说明要是文字");
-    const note = given.text?.trim() || null;
-    if (note !== null && [...note].length > ANSWER_TEXT) throw new InputError(`处理说明最多 ${ANSWER_TEXT} 字`);
-    closeCard(draft, card, "已处理", given.by ?? null, note);
+    closeCard(draft, card, "已处理", given.by ?? null, text);
     return { changed: true, state: "closed" };
   }
-  if (given.text !== undefined && typeof given.text !== "string") throw new InputError("回答要是文字");
-  const text = given.text?.trim() || null;
-  if (text !== null && [...text].length > ANSWER_TEXT) throw new InputError(`回答最多 ${ANSWER_TEXT} 字`);
   const optionCount = JSON.parse(card.options).length;
   const inRange = Number.isInteger(given.choice) && given.choice >= 0 && given.choice < optionCount;
   if (given.choice === undefined ? !text : !inRange) throw new InputError("没有这个选项");
@@ -528,8 +517,7 @@ function tick(draft: Draft) {
     }
     put(draft, "schedules", rule.name, { next_at: nextAt() });
   }
-  const isDue = (timer: Row) => timer.event_id === null && Date.parse(timer.at) <= now;
-  const due = rows(draft.view, "timers", { event_id: null }).filter(isDue);
+  const due = rows(draft.view, "timers", { event_id: null }).filter((timer) => Date.parse(timer.at) <= now);
   for (const timer of due.sort((a, b) => a.at.localeCompare(b.at))) {
     const rule = ruleNamed(draft, timer.rule);
     const event = { id: `timer:${timer.id}`, type: "timer.due", subject: timer.lane, hops: timer.hops ?? 0 };
@@ -565,8 +553,7 @@ const HANDLERS: Record<string, (draft: Draft, ...args: any[]) => unknown> = {
     const told = createCard(draft, { key, title, text, kind: "notice", fyi: true, once: true });
     if (!told.duplicate) return told;
     // Said again after every channel gave up on it: it gets another go.
-    const isGivenUp = (delivery: Row) => delivery.card_id === told.card && delivery.given_up;
-    const givenUp = rows(draft.view, "deliveries", { card_id: told.card }).filter(isGivenUp);
+    const givenUp = rows(draft.view, "deliveries", { card_id: told.card, given_up: 1 });
     for (const { card_id, channel } of givenUp) {
       put(draft, "deliveries", `${card_id}:${channel}`, { given_up: 0, ...NOT_TRYING });
     }
