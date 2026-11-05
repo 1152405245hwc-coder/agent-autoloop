@@ -24,7 +24,8 @@ const HELP = `Agent 自动化中台
   agent-autoloop why <第几轮> [--json]  查看时间线；--json 输出原始事实
   agent-autoloop conformance <地址> --config <测试凭据文件>
                                     在测试中台上检查协议
-  agent-autoloop status                  现在什么情况：谁在线、等你什么、在做什么、做过什么、花了多少
+  agent-autoloop status [--json]         现在什么情况：谁在线、等你什么、在做什么、做过什么、花了多少
+                                     --json 输出 /v1/state 的原始结构，给脚本用
   agent-autoloop answer <卡片> [序号] [--text 别的想法]
                                     回答一张卡片；通知不用写序号
   agent-autoloop resolve <卡片> <结果>   这件事不用决定了，写一句结果
@@ -61,6 +62,11 @@ const INIT_USAGE = `用法：agent-autoloop init [--agent claude|codex] [--comma
 const TRY_USAGE = `用法：agent-autoloop try
 
 用本机接好的 Agent 跑一遍完整流程：提问，进程退出等你回复，你拍板，它接着干完。`;
+
+const STATUS_USAGE = `用法：agent-autoloop status [--json]
+
+现在什么情况：谁在线、等你什么、在做什么、做过什么、花了多少。
+  --json  输出 /v1/state 的原始结构，给脚本和看板用`;
 
 type Flags = Record<string, string | true>;
 
@@ -324,9 +330,10 @@ const RUN_STATES: Record<string, string> = {
   cancelled: "停了",
 };
 
-async function status() {
+async function status(named: Flags) {
   const owner = ownerClient();
   const state = await owner.state();
+  if (named.json !== undefined) return console.log(JSON.stringify(state, null, 2));
   const { totals } = state;
   const clock = { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" } as const;
   const at = (iso: string) => new Date(iso).toLocaleString("zh-CN", { timeZone: state.timezone, ...clock });
@@ -586,7 +593,7 @@ const commands: Record<string, () => unknown> = {
     flagsOf(args, [], TRY_USAGE);
     return tryIt();
   },
-  status,
+  status: () => status(flagsOf(args, ["json"], STATUS_USAGE).named),
   why: () => why(args),
   conformance: () => checkConformance(args),
   answer: () => answer(args),
