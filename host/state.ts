@@ -1,7 +1,7 @@
 // What's going on, for the owner's own clients, read from what's there: rules, cards, runs and who has been seen. Nothing
 // is decided by it, so it's no part of the kernel.
 import type { SQLInputValue } from "node:sqlite";
-import { dayStart, nextRun, parseCron } from "../kernel/cron.ts";
+import { describeCron, dayStart, nextRun, parseCron } from "../kernel/cron.ts";
 import { SEEN_EVERY } from "../kernel/due.ts";
 import { iso, type Row } from "../kernel/evolve.ts";
 import type { cardView } from "../kernel/query.ts";
@@ -29,21 +29,6 @@ export const viewStatements = Object.entries(VIEWS).map(([table, columns]) => {
   const selected = columns.split(" ").map((column) => `json_extract(data,'$.${column}') AS ${column}`);
   return `DROP VIEW IF EXISTS ${table}; CREATE VIEW ${table} AS SELECT ${selected.join(",")} FROM projections WHERE collection='${table}'`;
 });
-
-const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六", "日"];
-
-/** A common schedule in plain words (每天 18:00, 每周日 06:00, 工作日 09:00, 每月 1 日 04:00); any other as written. */
-export function describeCron(text: string) {
-  const [minute, hour, day, month, weekday] = text.trim().split(/\s+/);
-  const number = /^\d+$/;
-  if (!number.test(minute) || !number.test(hour) || month !== "*" || !parseCron(text)) return text;
-  const at = `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
-  if (day === "*" && weekday === "*") return `每天 ${at}`;
-  if (day === "*" && number.test(weekday)) return `每周${WEEKDAYS[Number(weekday)]} ${at}`;
-  if (day === "*" && weekday === "1-5") return `工作日 ${at}`;
-  if (number.test(day) && weekday === "*") return `每月 ${Number(day)} 日 ${at}`;
-  return text;
-}
 
 /** Seen this recently counts as online: two minutes of quiet, by a stamp that can be behind by SEEN_EVERY. */
 const ONLINE = 120_000 + SEEN_EVERY;

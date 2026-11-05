@@ -4,8 +4,7 @@
 // schedule that never comes (February 30) never returns.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { describeCron } from "../host/state.ts";
-import { latestBefore, nextRun, parseCron } from "../kernel/cron.ts";
+import { describeCron, latestBefore, nextRun, parseCron } from "../kernel/cron.ts";
 
 const next = (text: string, after: string, zone = "Asia/Shanghai") => {
   const at = nextRun(parseCron(text)!, Date.parse(after), zone);

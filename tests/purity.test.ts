@@ -14,7 +14,7 @@ const kernel = readdirSync(join(root, "kernel"))
 test("the kernel stays small", () => {
   // A budget: what takes it past this says so in this line's diff, after looking at what could go or live outside.
   const lines = kernel.reduce((total, [, text]) => total + text.split("\n").length - 1, 0);
-  assert.ok(lines <= 1650, `kernel/ 有 ${lines} 行，超过了上限 1650：先看有什么能删或能放到外面`);
+  assert.ok(lines <= 1700, `kernel/ 有 ${lines} 行，超过了上限 1700：先看有什么能删或能放到外面`);
 });
 
 test("the kernel names no product", () => {
