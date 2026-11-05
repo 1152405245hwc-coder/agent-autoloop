@@ -3,7 +3,6 @@
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from "node:fs";
 import path from "node:path";
 import { backup as copyPages, DatabaseSync } from "node:sqlite";
-import { runningUp } from "../host/service.ts";
 
 const DB = "hub.db";
 const KEY = "master.key";
@@ -60,9 +59,24 @@ function readableBackup(source: string) {
   if (result !== "ok") throw new Error("备份里的 hub.db 读不出来");
 }
 
+/** Whether anything has the database open, a hub between requests included: only then is this lock out of reach. */
+function inUse(database: string) {
+  if (!existsSync(database)) return false;
+  const db = new DatabaseSync(database);
+  try {
+    db.exec("PRAGMA busy_timeout=0; PRAGMA locking_mode=EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT;");
+    return false;
+  } catch (error) {
+    // One that can't be read at all isn't in use: that may be why it's being restored.
+    return /locked/.test(String(error));
+  } finally {
+    db.close();
+  }
+}
+
 /** Puts a backup back in place, keeping what it replaced. */
-export async function restore(home: string, source: string, running: () => number | null = runningUp) {
-  if (running() !== null) {
+export async function restore(home: string, source: string) {
+  if (inUse(path.join(home, DB))) {
     throw new Error("中台还在跑：先停掉它（例如 agent-autoloop service remove，或手动停服务），再恢复");
   }
   readableBackup(source);

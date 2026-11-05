@@ -119,10 +119,13 @@ export async function deliver(
   if (!pr.merged_at && (pr.state !== "open" || !labels(pr).has("deliver"))) return { summary: "没有待交付的标记" };
   if (pr.head.repo?.full_name !== repo || pr.base.ref !== "main") throw new Error("只处理本仓库分支到 main 的合并请求");
   if (pr.auto_merge) await disableAuto(number, io);
-  const main = (await io.api("git/ref/heads/main")).object.sha;
-  const file = await io.api(`contents/ops/delivery.json?ref=${main}`);
-  const config = settings(JSON.parse(Buffer.from(file.content, "base64").toString("utf8")), testLocalHealth);
-  if (config.repo !== repo) throw new Error("main 的 repo 设置与交付仓库不一致");
+  const settingsAt = async (commit: string) => {
+    const file = await io.api(`contents/ops/delivery.json?ref=${commit}`);
+    const read = settings(JSON.parse(Buffer.from(file.content, "base64").toString("utf8")), testLocalHealth);
+    if (read.repo !== repo) throw new Error("main 的 repo 设置与交付仓库不一致");
+    return read;
+  };
+  let config = await settingsAt((await io.api("git/ref/heads/main")).object.sha);
   let head = pr.head.sha;
   await status(io, head, "delivery", "pending", "正在审查、检查和核实发布");
   // Sync inside the run: a thrown sync waits out the hub's growing retry backoff while main keeps moving.
@@ -141,6 +144,8 @@ export async function deliver(
         throw new Error("main 已前进，稍后重新同步和检查");
       }
     }
+    // The settings of the main this round is against: a newer one may add the health check its release has to pass.
+    config = await settingsAt(base);
     const findings = await io.review(pr, config, base);
     const current = await io.api(`pulls/${number}`);
     if (current.head.sha !== head) throw new Error("审查期间提交变了，等待重新交付");

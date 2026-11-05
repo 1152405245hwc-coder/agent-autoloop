@@ -4,7 +4,8 @@
 // a successful label deletion with a lost response turns a completed deployment into a false failure;
 // switching to review-only while checks run still merges the PR; a PR behind main ends the run after requesting a
 // sync and waits out the hub's growing retry delay while main keeps moving; commits GitHub synced beyond the main that was
-// read are reviewed as the branch's own; a delivery withdrawn while main moves on still syncs and reviews again.
+// read are reviewed as the branch's own; a delivery withdrawn while main moves on still syncs and reviews again; settings read
+// before main moved decide what a round against the newer main does, so a health check added there is skipped.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { deliver, fullCheck, waitLive, disableAuto, type DeliveryIO } from "../plugins/delivery/delivery.ts";
@@ -194,6 +195,27 @@ test("the review leaves out what GitHub synced beyond the main it was asked for"
   state.pr.head.sha = "behind";
   assert.equal((await deliver("example/app", 1, io)).merged, "merged");
   assert.deepEqual(bases, ["newer"]);
+});
+test("each round follows the settings of the main it reviews against", async () => {
+  const { io, state } = fixture();
+  syncing(io, state);
+  const { api } = io;
+  io.api = async (path, body, method) => {
+    if (path === "contents/ops/delivery.json?ref=new-main") {
+      const changed = { ...config, review: { ...config.review, status: "newer-review" } };
+      return { content: Buffer.from(JSON.stringify(changed)).toString("base64") };
+    }
+    return api(path, body, method);
+  };
+  io.review = async () => {
+    if (++state.reviewed === 1) state.main = "new-main";
+    return [];
+  };
+  assert.equal((await deliver("example/app", 1, io)).merged, "merged");
+  assert.deepEqual(
+    state.statuses.filter((s: any) => s.context !== "delivery").map((s: any) => s.context),
+    ["newer-review"],
+  );
 });
 test("a delivery withdrawn while main moves on stops without touching the branch again", async () => {
   const { io, state } = fixture();

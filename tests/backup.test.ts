@@ -1,9 +1,10 @@
 // Failure modes: a backup or its check fails on a real hub's database, whose indexes call functions only the hub has; a backup
 // taken while the hub runs misses what's in the WAL; a restore leaves the old WAL beside the new database, or drops what's only
 // in the WAL of the folder it reads; a broken master.key or database is restored; a failed restore loses what it replaced, its
-// WAL included; restoring runs with the hub up; a restore runs without being confirmed.
+// WAL included; restoring runs while anything has the database open, a hub started some other way or between requests
+// included; a database too broken to read stops the restore that would replace it; a restore runs without being confirmed.
 import assert from "node:assert/strict";
-import { execFile, spawnSync } from "node:child_process";
+import { execFile, spawn, spawnSync } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -15,6 +16,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { once } from "node:events";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -37,7 +39,6 @@ const folder = () => {
   mkdirSync(made);
   return made;
 };
-const nobodyUp = () => null;
 const mode = (file: string) => statSync(file).mode & 0o777;
 const rows = (file: string) => {
   const db = new DatabaseSync(file);
@@ -74,7 +75,7 @@ test("a real hub's data, backed up while it runs, comes back whole under its own
   await assert.rejects(backup(home, target), /不是空的/);
 
   const other = folder();
-  await restore(other, target, nobodyUp);
+  await restore(other, target);
   assert.equal(readFileSync(join(other, "master.key"), "utf8"), readFileSync(join(home, "master.key"), "utf8"));
   // Started on the restored files, as the hub would be: it opens, and it knows what the first one knew.
   const started = spawnSync(
@@ -105,7 +106,7 @@ test("a restore keeps what it replaced, and the old WAL doesn't stay beside the 
   await backup(source, backedUp);
   rmSync(join(target, "master.key"));
   writeFileSync(join(target, "master.key"), `${"z".repeat(43)}\n`);
-  const { safety } = await restore(target, backedUp, nobodyUp);
+  const { safety } = await restore(target, backedUp);
   assert.ok(!existsSync(join(target, "hub.db-wal")));
   assert.equal(rows(join(target, "hub.db")), 2);
   assert.equal(readFileSync(join(target, "master.key"), "utf8").trim(), key);
@@ -118,7 +119,7 @@ test("a folder with a WAL beside its database restores what's only in the WAL", 
   const source = folder();
   withWal(source);
   const target = folder();
-  await restore(target, source, nobodyUp);
+  await restore(target, source);
   assert.equal(rows(join(target, "hub.db")), 2);
 });
 
@@ -129,8 +130,7 @@ test("a restore that fails halfway puts everything back, the WAL with its databa
   const source = folder();
   withWal(source);
   mkdirSync(join(source, "config.json"));
-  await assert.rejects(restore(target, source, nobodyUp));
-  assert.ok(existsSync(join(target, "hub.db-wal")));
+  await assert.rejects(restore(target, source));
   assert.equal(rows(join(target, "hub.db")), 2);
   assert.equal(readFileSync(join(target, "config.json"), "utf8"), "mine");
   assert.deepEqual(
@@ -139,30 +139,68 @@ test("a restore that fails halfway puts everything back, the WAL with its databa
   );
 });
 
-test("a restore refuses a backup whose key or database is broken, and a hub that's up", async () => {
+test("a restore refuses a backup whose key or database is broken", async () => {
   const brokenKey = folder();
   withWal(brokenKey);
   writeFileSync(join(brokenKey, "master.key"), "short");
   const target = folder();
-  await assert.rejects(restore(target, brokenKey, nobodyUp), /master\.key 坏了/);
+  await assert.rejects(restore(target, brokenKey), /master\.key 坏了/);
 
   const brokenDatabase = folder();
   writeFileSync(join(brokenDatabase, "hub.db"), "this isn't a database, not even close to one".repeat(100));
   writeFileSync(join(brokenDatabase, "master.key"), key);
-  await assert.rejects(restore(target, brokenDatabase, nobodyUp), /读不出来/);
+  await assert.rejects(restore(target, brokenDatabase), /读不出来/);
+  assert.deepEqual(readdirSync(target), [], "nothing was touched");
+});
 
+test("a restore refuses while anything has the database open, and only then", async () => {
   const good = folder();
   withWal(good);
-  await assert.rejects(
-    restore(target, good, () => 12345),
-    /中台还在跑/,
+  await assert.rejects(restore(home, good), /中台还在跑/, "a hub in this process");
+
+  const target = folder();
+  withWal(target);
+  const holder = spawn(
+    process.execPath,
+    [
+      "--disable-warning=ExperimentalWarning",
+      "--input-type=module",
+      "-e",
+      `import { DatabaseSync } from "node:sqlite";
+       const db = new DatabaseSync(${JSON.stringify(join(target, "hub.db"))});
+       db.exec("PRAGMA journal_mode=WAL; INSERT INTO facts VALUES (3);");
+       console.log("open");
+       setInterval(() => {}, 1000);`,
+    ],
+    { stdio: ["ignore", "pipe", "inherit"] },
   );
-  assert.deepEqual(readdirSync(target), [], "nothing was touched");
+  await once(holder.stdout, "data");
+  try {
+    // Another process, idle between requests, that left no number anywhere: how a hub embedded in something else looks.
+    await assert.rejects(restore(target, good), /中台还在跑/);
+    assert.equal(rows(join(target, "hub.db")), 3, "nothing was touched");
+  } finally {
+    holder.kill("SIGKILL");
+    await once(holder, "exit");
+  }
+  // Killed, it holds nothing any more, and what it wrote is still there for the copy that's kept.
+  const { safety } = await restore(target, good);
+  assert.equal(rows(join(target, "hub.db")), 2);
+  assert.equal(rows(join(safety, "hub.db")), 3);
+});
+
+test("a database too broken to read doesn't stop the restore that would replace it", async () => {
+  const good = folder();
+  withWal(good);
+  const target = folder();
+  writeFileSync(join(target, "hub.db"), "this isn't a database, not even close to one".repeat(100));
+  await restore(target, good);
+  assert.equal(rows(join(target, "hub.db")), 2);
 });
 
 test("the commands write where they're told and ask before replacing anything", async () => {
   const machine = folder();
-  await restore(machine, await backupOfHub(), nobodyUp);
+  await restore(machine, await backupOfHub());
   const cli = (...args: string[]) =>
     promisify(execFile)(
       process.execPath,
