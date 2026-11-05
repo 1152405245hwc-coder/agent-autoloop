@@ -30,6 +30,17 @@ test("explain lists rules, agents, channels and next runs, but no prompt or skil
     assert.ok(!lines.includes(privateText), privateText);
 });
 
+test("explain says which rules go on in the last round's session", () => {
+  assert.ok(!explainRules(fixture, at(0), "UTC").join("\n").includes("接着上一轮的会话"));
+  const given = JSON.parse(fixture);
+  given.rules[0].resume = true;
+  const lines = explainRules(JSON.stringify(given), at(0), "UTC");
+  assert.ok(
+    lines.some((line) => line.includes("feedback.*") && line.includes("接着上一轮的会话")),
+    lines.join("\n"),
+  );
+});
+
 test("a dry run says which rules would take the event, and doesn't need a hub", () => {
   assert.match(
     previewEvent(fixture, "app", { id: "1", type: "feedback.new", subject: "#1" }, at(0), "UTC").join("\n"),

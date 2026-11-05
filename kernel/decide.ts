@@ -114,6 +114,25 @@ function assignQueued(draft: Draft, run: Row) {
   put(draft, "runs", run.id, { agent: rule.to, rules_version: config.version, ...session });
 }
 const threadOf = (run: Row) => ({ rule: run.rule, lane: run.lane, grp: run.grp });
+
+/** The session a round about to start goes on in. With resume, one that has none takes its thread's last, unless that round was
+ * stopped: what stopped it, or the owner's reason, would meet this one too. Rounds on a thread can share a session, so another
+ * still going, or one the hub lost track of, may be running in it: a second process mustn't open it, and a new one starts. */
+function settleSession(draft: Draft, run: Row) {
+  const rule = ruleNamed(draft, run.rule);
+  const thread = { rule: run.rule, lane: run.lane };
+  const carried = run.session ?? run.resume;
+  let session = carried;
+  if (!session && rule?.resume) {
+    const [last] = rows(draft.view, "runs", { ...thread, state: ["done", "nothing", "cancelled"] }, 1, true);
+    if (last?.state !== "cancelled" && last?.agent === rule.to) session = last.session;
+  }
+  if (!session) return;
+  const going = rows(draft.view, "runs", { ...thread, state: ["claimed", "unknown"] });
+  if (going.some((other) => (other.session ?? other.resume) === session)) {
+    put(draft, "runs", run.id, nulls("session", "resume"));
+  } else if (session !== carried) put(draft, "runs", run.id, { resume: session });
+}
 const hopsOf = (draft: Draft, run: Row) => Math.max(0, ...eventsOf(draft.view, run.id).map((event) => event.hops ?? 0));
 
 function closeCard(draft: Draft, card: Row, result: string, by: string | null = null, note: string | null = null) {
@@ -275,7 +294,10 @@ function claimNext(draft: Draft, worker: string, claim: string) {
   const held = claimed.find((run) => run.claim === claim && workerOf(draft.view, run) === worker);
   const run = held ?? runs.find(claimable);
   if (!run) return null;
-  if (!held) assignQueued(draft, run);
+  if (!held) {
+    assignQueued(draft, run);
+    settleSession(draft, draft.view.get("runs", run.id)!);
+  }
   const since = held ? { claimed_at: run.claimed_at, link: run.link } : { claimed_at: draft.at, link: null };
   const rules_version = held ? run.rules_version : draft.view.get("config", "rules")!.version;
   const claiming = { state: "claimed", claim, issued: draft.seq, seen_at: draft.at, rules_version, ...since };

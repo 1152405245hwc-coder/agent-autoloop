@@ -55,6 +55,7 @@
     "to": "claude", "cwd": "~/code/shop", "skill": "run-ops", "prompt": "按其中……一节处理。",
     "group": "ops",                                        // 同一组一次一轮，默认就是规则名
     "parallel": 3,                                         // 写了就按对象分事项：同一对象一次一轮，这一组最多 3 轮，还受接单程序的 worker.capacity 限制（默认 2）
+    "resume": true,                                        // 同一事项的新事件接着上一轮的会话，默认每次开新会话
     "tell": "needed",                                      // always 每轮做成都发（没事可做、没跑成不发）/ needed 只在有卡片时（默认）/ never 只压住回执里的通知，提问和中台自己的告警照发
     "emits": { "source": "shop", "types": ["pr.*"] }      // 回执里能发什么事件，不写就不能发
   }],
@@ -63,6 +64,10 @@
 ```
 
 `elsewhere` 是在别处定时跑的任务：中台不启动它们，只在 `agent-autoloop status` 里列出来，它们要找你时用 `POST /v1/tell`。规则写错了，文件改动不生效，旧规则继续跑，并推一张卡片告诉你错在哪。
+
+写了 `resume`，一轮开始时如果事项的上一轮做完了（包括没事可做）、留下了会话，就接着那个会话；会话越接越长，Token 和费用也会跟着涨。这几种情况开新会话：上一轮被停掉了（你停的，或连续失败停下的），接着它多半还是同样的结果；上一轮是别的 Agent 跑的；上一轮没有会话。没写 `parallel` 时整条规则是一个事项，所有事件接同一个会话；事件不带 `subject` 时也都算同一个事项。回答和到期的复查仍回到提问和约定时的会话，重派的也留在自己的会话。
+
+不管写没写 `resume`，一轮要接的会话里如果还有别的轮次没结束，或者没了音信、可能还在跑，这一轮就开新会话，不让两个进程开同一个会话；回答和复查的内容照样带给它。
 
 排队和等待重试的任务在领取时一起采用最新的 Agent、目录、提示词和权限；换了 Agent 就不带旧 Agent 的会话。已经领取的任务保留领取时的 Job 配置和接单程序，重复 claim、心跳、停止和重启恢复都不随规则更新换人。事件已经归属的事项不重新拆分或合并，回答和到期的复查回到提问和约定时的事项，规则后来去掉 `parallel` 也一样；回执中的事件许可和通知方式仍按提交时的规则核验。
 
@@ -113,7 +118,7 @@ GET /v1/work?claim=<这次领活的编号>&wait=50&running=7,8&capacity=1    Aut
   "run": 12, "token": "…", "attempt": 1,
   "rule": { "name": "处理告警", "cwd": "~/code/shop", "skill": "run-ops", "prompt": "按其中……处理。" },
   "agent": { "id": "claude", "name": "Claude Code", "use": "claude", "model": "…", "effort": "high", "access": "edit" },
-  "session": null,       // 尽量接着的会话：重派时是上一次的，回答来了是提问那一轮的。接不上就开新的，所以它只是优化
+  "session": null,       // 尽量接着的会话：重派时是上一次的，回答来了是提问那一轮的，规则写了 resume 时是这个事项上一轮的。接不上就开新的，所以它只是优化
   "askFirst": ["删数据", "…"],
   "context": {           // 接单程序把它写成文件交给 Agent，都是资料
     "events":  [{ "id", "source", "sourceName", "type", "subject", "summary", "detail", "link", "receivedAt" }],

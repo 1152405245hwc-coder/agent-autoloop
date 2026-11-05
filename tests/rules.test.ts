@@ -90,6 +90,9 @@ test("a mistake says which rule and what is wrong", () => {
     r.rules[0].parallel = 0;
   }, /规则「意见」.*parallel/);
   problem((r) => {
+    r.rules[0].resume = "thread";
+  }, /规则「意见」.*resume/);
+  problem((r) => {
     r.rules[4].emits.source = "nowhere";
   }, /规则「巡检」.*emits/);
   problem((r) => {
