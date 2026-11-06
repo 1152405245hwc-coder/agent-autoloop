@@ -6,7 +6,9 @@
 // say it started, so the worker runs its prompt again; one that never got going says it did, so the worker doesn't start a
 // new session for it; what Claude said before a background task ended is taken for its answer, or starts the wait for a
 // turn that won't exit; the raw messages of a broken Claude run become the reason it failed. A line of output that's JSON
-// but no message, like `null`, stops a plugin reading anything.
+// but no message, like `null`, stops a plugin reading anything. A command line's placeholder pass rewrites the prompt
+// itself — a `{cwd}` or a `$&` the person wrote arrives as the folder or as `{prompt}` — so the program is asked
+// something other than what the event said.
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -278,6 +280,23 @@ test("a plain command: placeholders filled in, stdout is its last message, a bad
   assert.deepEqual(command.read("中途", null, ""), {});
   assert.match(command.read("", 3, "boom").error!, /退出码 3：boom/);
   assert.equal(command.link, undefined, "it has no session to go on in");
+});
+
+test("a plain command's prompt reaches the program as it was written, whatever it contains", () => {
+  // The prompt is what someone asked for; the placeholders belong to the command line, not to the words put in it.
+  const written = [
+    "把 {cwd} 这个词原样打印出来",
+    "价格是 $& 元",
+    "路径 $` 和 $' 也要留下",
+    "{context} 和 {prompt} 都是字面",
+  ];
+  for (const prompt of written) {
+    const argv = command.command({ ...turn, prompt, command: ["tool", "-p", "{prompt}"] });
+    assert.deepEqual(argv, ["tool", "-p", prompt], `${prompt} 传到程序时被改写了`);
+  }
+  // The command line itself still fills in, and one that names the prompt twice gets it twice.
+  const both = command.command({ ...turn, model: "m", command: ["tool", "{prompt}", "{model}"] });
+  assert.deepEqual(both, ["tool", "做这件事", "m"]);
 });
 
 test("a program that isn't there says so", () => {
