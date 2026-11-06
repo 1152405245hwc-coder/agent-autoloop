@@ -39,7 +39,8 @@ export default {
     PERMISSIONS[turn.access],
     "--add-dir",
     turn.folder,
-    // A worktree moves the conversation away from where a later --resume looks for it.
+    // Entering a worktree moves the whole transcript under the worktree's project folder (still so on 2.1.317): --resume
+    // finds it, but the desktop app, opening the session link from the run's folder, showed only its first message.
     "--disallowedTools=EnterWorktree,ExitWorktree",
   ],
   read(stdout, code, stderr) {
