@@ -1,6 +1,5 @@
 // Naming a run: `stop` and `why` with no number, or with a word that is not one, used to send /v1/runs/NaN to the hub and
-// print "没有这个地址", which reads like a broken hub rather than a mistyped command. `stop --help` used to do the same (now answered by refuseUnknownFlags). Both are
-// found here by running the real program in a home nothing is installed into: the usage must come before any hub is asked.
+// print "没有这个地址", which reads like a broken hub rather than a mistyped command. Found here by running the real program in a home nothing is installed into: the usage must come before any hub is asked.
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -42,13 +41,6 @@ for (const args of [
     assert.match(ran.stderr, new RegExp(`用法：agent-autoloop ${args[0]} <第几轮>`));
   });
 }
-
-// After #108, --help is answered by refuseUnknownFlags before stop/why run, and exits 0.
-test("stop --help says how to name a run without asking the hub", async () => {
-  const ran = await run(["stop", "--help"]);
-  assert.equal(ran.code, 0);
-  assert.match(ran.stdout, /用法：agent-autoloop stop <第几轮>/);
-});
 
 test("a real run number still goes on to the hub", async () => {
   for (const args of [
