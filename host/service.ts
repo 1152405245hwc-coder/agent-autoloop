@@ -1,7 +1,7 @@
 // Keeping it running: launchd on a Mac, systemd on Linux. Both start it at login and restart it if it stops.
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { HOME } from "./home.ts";
@@ -29,11 +29,25 @@ const systemdItem = (text: string, escapeDollar = false) => {
   return `"${escaped}"`;
 };
 
+/** Homebrew keeps a version's files under `Cellar`, and deletes that directory at the next upgrade; `opt` beside it
+ *  is the link that follows. A program named by its Cellar path dies the next time the machine is upgraded. */
+function stablePath(executable: string) {
+  const cellar = /^(\/opt\/homebrew|\/usr\/local)\/Cellar\/([^/]+)\/[^/]+\/bin\/([^/]+)$/.exec(executable);
+  if (!cellar) return executable;
+  const opt = `${cellar[1]}/opt/${cellar[2]}/bin/${cellar[3]}`;
+  try {
+    return realpathSync(opt) === executable ? opt : executable;
+  } catch {
+    return executable;
+  }
+}
+
 export function plist() {
   const logs = path.join(HOME, "logs");
   const systemPaths = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
-  const searchPath = [path.dirname(process.execPath), ...systemPaths].join(":");
-  const program = [process.execPath, "--disable-warning=ExperimentalWarning", PROGRAM, "up"];
+  const executable = stablePath(process.execPath);
+  const searchPath = [path.dirname(executable), ...systemPaths].join(":");
+  const program = [executable, "--disable-warning=ExperimentalWarning", PROGRAM, "up"];
   const programArguments = program.map((part) => `<string>${xml(part)}</string>`).join("");
   const homeEntry = `<key>AGENT_AUTOLOOP_HOME</key><string>${xml(HOME)}</string>`;
   const pathEntry = `<key>PATH</key><string>${xml(searchPath)}</string>`;
