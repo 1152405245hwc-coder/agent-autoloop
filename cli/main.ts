@@ -663,7 +663,8 @@ function addPlugin(args: string[]) {
     .at(-1)!
     .replace(/\.git$/, "")
     .toLowerCase();
-  if (!/^[a-z][a-z0-9-]*$/.test(name)) fail("插件仓库名要用小写字母、数字和 -");
+  if (!/^[a-z][a-z0-9-]*$/.test(name))
+    fail(`插件名字「${name}」不能用：只能用小写字母、数字和 -，规则里的 use 也写这个名字`);
   mkdirSync(path.join(HOME, "plugins"), { recursive: true });
   const clone = spawnSync("git", ["clone", "--", url, path.join(HOME, "plugins", name)], { stdio: "inherit" });
   if (clone.status !== 0) fail("安装失败。");
